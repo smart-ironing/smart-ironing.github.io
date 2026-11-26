@@ -7,22 +7,32 @@
   <title>Laundry & Ironing App</title>
   <style>
     body {font-family: Arial, sans-serif; margin:0; padding:0; background:#f5f5f5;}
-    .container {max-width:420px; margin:40px auto; background:#fff; padding:20px; border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,.1);}
+    .container {max-width:440px; margin:30px auto; background:#fff; padding:20px; border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,.1);}
     h1 {text-align:center; color:#3f51b5;}
     button, input[type=button] {width:100%; padding:12px; margin:8px 0; font-size:16px; border:none; border-radius:4px; cursor:pointer;}
     .primary {background:#3f51b5; color:#fff;}
     .secondary {background:#ff9800; color:#fff;}
+    .success {background:#2e7d32; color:#fff;}
     .danger {background:#e53935; color:#fff; font-size:14px; padding:10px; margin-top:20px;}
+    .small-btn {width:auto; padding:6px 10px; font-size:13px; margin:4px 4px 0 0; display:inline-block;}
     .link {background:none; color:#3f51b5; text-decoration:underline; padding:0;}
     .field {margin-bottom:12px;}
     label {display:block; margin-bottom:4px; font-weight:bold;}
+    .inline-label {display:inline; font-weight:normal; margin-right:12px;}
     input, select, textarea {width:100%; padding:8px; box-sizing:border-box;}
-    .total {font-weight:bold; margin-top:8px;}
+    input[type=radio] {width:auto;}
+    .total {font-weight:bold; margin-top:8px; font-size:17px;}
     .status {text-align:center; font-size:12px; color:#666; margin-bottom:10px;}
+    .cart-box {border:1px solid #ddd; background:#fafafa; border-radius:6px; padding:10px; margin:12px 0;}
+    .cart-item {display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-bottom:1px solid #eee; font-size:14px;}
+    .cart-item:last-child {border-bottom:none;}
+    .remove-btn {background:#e53935; color:#fff; border:none; border-radius:4px; padding:4px 8px; font-size:12px; cursor:pointer; width:auto; margin:0;}
+    .edit-panel {background:#f9fbe7; border:1px solid #cddc39; border-radius:6px; padding:10px; margin-top:8px;}
   </style>
   <script>
     // ---------- Supabase Configuration ----------
     let orders = [];
+    let draftItems = [];
     const supabaseUrl = "https://cfsaiqgvpopnlhagxvqa.supabase.co";
     const supabaseKey = "sb_publishable_3sWev9-qMw38MDdl1CeS4g_maISPvi4";
     const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
@@ -147,16 +157,46 @@
       currentClothList.forEach(item => {
         const opt = document.createElement('option');
         opt.value = item.name;
-        opt.textContent = `${item.name}`;
+        opt.textContent = item.name;
         select.appendChild(opt);
       });
     }
 
+    function getCurrentItemSelection() {
+      const cloth = document.getElementById('clothSelect').value;
+      const customName = document.getElementById('customName').value.trim();
+      const customPrice = parseFloat(document.getElementById('customPrice').value) || 0;
+      const quantity = parseInt(document.getElementById('quantity').value) || 0;
+
+      let materialDesc = cloth;
+      let unitPrice = 0;
+
+      if (cloth === 'Others') {
+        materialDesc = customName || 'Other';
+        unitPrice = customPrice;
+      } else {
+        const item = currentClothList.find(c => c.name === cloth);
+        if (item && ('dc' in item)) {
+          const selectedRate = document.querySelector('input[name="rateOption"]:checked').value;
+          unitPrice = selectedRate === 'dc' ? item.dc : item.pl;
+          materialDesc = `${cloth} (${selectedRate.toUpperCase()})`;
+        } else {
+          unitPrice = item ? item.price : 0;
+        }
+      }
+
+      return {
+        material: materialDesc,
+        quantity,
+        unitPrice,
+        amount: unitPrice * quantity
+      };
+    }
+
     function handleRateChange() {
       const select = document.getElementById('clothSelect');
-      const chosen = select.value;
-      if (chosen === 'Others') return;
-      const item = currentClothList.find(c => c.name === chosen);
+      if (select.value === 'Others') return;
+      const item = currentClothList.find(c => c.name === select.value);
       const selectedRate = document.querySelector('input[name="rateOption"]:checked').value;
       const price = selectedRate === 'dc' ? item.dc : item.pl;
       document.getElementById('unitPrice').textContent = price !== undefined ? price : '0';
@@ -196,8 +236,84 @@
         document.getElementById('unitPrice').textContent = document.getElementById('customPrice').value || '0';
       }
       const unitPrice = parseFloat(document.getElementById('unitPrice').textContent) || 0;
-      const total = qty * unitPrice;
-      document.getElementById('totalAmount').textContent = isNaN(total) ? '0.00' : total.toFixed(2);
+      const currentItemTotal = qty * unitPrice;
+      document.getElementById('itemSubtotal').textContent = isNaN(currentItemTotal) ? '0.00' : currentItemTotal.toFixed(2);
+
+      const addedItemsTotal = draftItems.reduce((sum, it) => sum + it.amount, 0);
+      const grandTotal = addedItemsTotal + (draftItems.length === 0 ? currentItemTotal : 0);
+      document.getElementById('totalAmount').textContent = isNaN(grandTotal) ? '0.00' : grandTotal.toFixed(2);
+    }
+
+    function renderDraftItems() {
+      const listEl = document.getElementById('draftItemsList');
+      const boxEl = document.getElementById('draftItemsBox');
+      listEl.innerHTML = '';
+
+      if (draftItems.length === 0) {
+        boxEl.style.display = 'none';
+        computeTotal();
+        return;
+      }
+
+      boxEl.style.display = 'block';
+      draftItems.forEach((it, index) => {
+        const row = document.createElement('div');
+        row.className = 'cart-item';
+        row.innerHTML = `
+          <span><strong>${it.material}</strong> × ${it.quantity} @ ₹${it.unitPrice} = <strong>₹${it.amount.toFixed(2)}</strong></span>
+          <button type="button" class="remove-btn" onclick="removeDraftItem(${index})">Remove</button>
+        `;
+        listEl.appendChild(row);
+      });
+
+      const addedTotal = draftItems.reduce((sum, it) => sum + it.amount, 0);
+      document.getElementById('draftItemsTotal').textContent = addedTotal.toFixed(2);
+      document.getElementById('totalAmount').textContent = addedTotal.toFixed(2);
+    }
+
+    function addItemToOrder() {
+      const sel = getCurrentItemSelection();
+      if (!sel.material || sel.quantity <= 0) {
+        alert('Please select a valid item and enter quantity > 0.');
+        return;
+      }
+      if (document.getElementById('clothSelect').value === 'Others' && sel.unitPrice <= 0) {
+        alert('Please enter a custom unit price > 0.');
+        return;
+      }
+
+      draftItems.push(sel);
+      document.getElementById('customName').value = '';
+      document.getElementById('customPrice').value = '';
+      document.getElementById('quantity').value = 1;
+      onClothChange();
+      renderDraftItems();
+    }
+
+    function removeDraftItem(index) {
+      draftItems.splice(index, 1);
+      renderDraftItems();
+    }
+
+    function formatCombinedOrder(items) {
+      if (items.length === 1) {
+        return {
+          material: items[0].material,
+          quantity: items[0].quantity,
+          unitPrice: items[0].unitPrice,
+          amount: items[0].amount
+        };
+      }
+      const combinedMaterial = items.map(i => `${i.material} (${i.quantity}×₹${i.unitPrice})`).join(', ');
+      const totalQty = items.reduce((sum, i) => sum + i.quantity, 0);
+      const totalAmount = items.reduce((sum, i) => sum + i.amount, 0);
+      const avgUnitPrice = totalQty > 0 ? Number((totalAmount / totalQty).toFixed(2)) : 0;
+      return {
+        material: combinedMaterial,
+        quantity: totalQty,
+        unitPrice: avgUnitPrice,
+        amount: totalAmount
+      };
     }
 
     async function saveOrder() {
@@ -205,43 +321,33 @@
       const name = document.getElementById('custName').value.trim();
       const mobile = document.getElementById('custMobile').value.trim();
       const date = document.getElementById('orderDate').value;
-      const cloth = document.getElementById('clothSelect').value;
-      const customName = document.getElementById('customName').value.trim();
-      const customPrice = parseFloat(document.getElementById('customPrice').value) || 0;
-      const quantity = parseInt(document.getElementById('quantity').value) || 0;
 
-      let materialDesc = cloth;
-      let unitPrice = 0;
-
-      if (cloth === 'Others') {
-        materialDesc = customName || 'Other';
-        unitPrice = customPrice;
-      } else {
-        const item = currentClothList.find(c => c.name === cloth);
-        if (item && ('dc' in item)) {
-          const selectedRate = document.querySelector('input[name="rateOption"]:checked').value;
-          unitPrice = selectedRate === 'dc' ? item.dc : item.pl;
-        } else {
-          unitPrice = item ? item.price : 0;
+      let itemsToSave = [...draftItems];
+      if (itemsToSave.length === 0) {
+        const current = getCurrentItemSelection();
+        if (!current.material || current.quantity <= 0) {
+          alert('Please fill all required fields and ensure quantity is > 0');
+          return;
         }
+        itemsToSave.push(current);
       }
 
-      const amount = unitPrice * quantity;
-      if (!name || !mobile || !date || !materialDesc || quantity <= 0) {
-        alert('Please fill all required fields and ensure quantity is > 0');
+      if (!name || !mobile || !date) {
+        alert('Please enter Customer Name, Mobile Number, and Date.');
         return;
       }
 
+      const summary = formatCombinedOrder(itemsToSave);
       const order = {
         id: Date.now(),
         service,
         name,
         mobile,
         date,
-        material: materialDesc,
-        quantity,
-        unitPrice,
-        amount
+        material: summary.material,
+        quantity: summary.quantity,
+        unitPrice: summary.unitPrice,
+        amount: summary.amount
       };
 
       await saveOrderToSupabase(order);
@@ -271,22 +377,93 @@
       results.forEach(o => {
         const div = document.createElement('div');
         div.style.border = '1px solid #ccc';
-        div.style.borderRadius = '4px';
-        div.style.padding = '8px';
-        div.style.marginBottom = '8px';
+        div.style.borderRadius = '6px';
+        div.style.padding = '10px';
+        div.style.marginBottom = '10px';
         const amountStr = (o.amount !== undefined && o.amount !== null) ? Number(o.amount).toFixed(2) : '0.00';
-        div.innerHTML = `<strong>${o.name}</strong> – ${o.mobile}<br>
-                         ${o.service} on ${o.date}<br>
-                         ${o.material} × ${o.quantity} @ ₹${o.unitPrice} = ₹${amountStr}
-                         <button onclick="showReceipt(${o.id})">View Receipt</button>`;
+        div.innerHTML = `
+          <strong>${o.name}</strong> – ${o.mobile}<br>
+          ${o.service} on ${o.date}<br>
+          ${o.material} • Count: <strong>${o.quantity}</strong> @ ₹${o.unitPrice} = <strong>₹${amountStr}</strong><br>
+          <button type="button" class="small-btn primary" onclick="showReceipt(${o.id})">View Receipt</button>
+          <button type="button" class="small-btn secondary" onclick="toggleEditOrder(${o.id})">Edit Count / Order</button>
+          <div id="editBox-${o.id}" class="edit-panel" style="display:none;">
+            <label style="font-size:13px;">Items / Material</label>
+            <input type="text" id="editMaterial-${o.id}" value="${escapeHtml(o.material)}" style="margin-bottom:8px;">
+            <label style="font-size:13px;">Cloth Count (Quantity)</label>
+            <input type="number" id="editQty-${o.id}" min="1" value="${o.quantity}" oninput="previewEditedAmount(${o.id})" style="margin-bottom:8px;">
+            <label style="font-size:13px;">Unit Price (₹)</label>
+            <input type="number" step="0.01" id="editUnitPrice-${o.id}" min="0" value="${o.unitPrice}" oninput="previewEditedAmount(${o.id})" style="margin-bottom:8px;">
+            <div style="font-size:14px; margin-bottom:8px;">
+              <strong>Updated Amount (₹): </strong><span id="editPreviewAmount-${o.id}">${amountStr}</span>
+            </div>
+            <button type="button" class="small-btn success" onclick="saveEditedOrder(${o.id})">Save Changes</button>
+            <button type="button" class="small-btn" onclick="toggleEditOrder(${o.id})">Cancel</button>
+          </div>
+        `;
         container.appendChild(div);
       });
+    }
+
+    function escapeHtml(str) {
+      return String(str || '')
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+    }
+
+    function toggleEditOrder(id) {
+      const box = document.getElementById(`editBox-${id}`);
+      if (!box) return;
+      box.style.display = box.style.display === 'none' ? 'block' : 'none';
+      if (box.style.display === 'block') {
+        previewEditedAmount(id);
+      }
+    }
+
+    function previewEditedAmount(id) {
+      const qty = parseInt(document.getElementById(`editQty-${id}`).value) || 0;
+      const unitPrice = parseFloat(document.getElementById(`editUnitPrice-${id}`).value) || 0;
+      const newAmount = qty * unitPrice;
+      document.getElementById(`editPreviewAmount-${id}`).textContent = isNaN(newAmount) ? '0.00' : newAmount.toFixed(2);
+    }
+
+    async function saveEditedOrder(id) {
+      const newMaterial = document.getElementById(`editMaterial-${id}`).value.trim();
+      const newQty = parseInt(document.getElementById(`editQty-${id}`).value) || 0;
+      const newUnitPrice = parseFloat(document.getElementById(`editUnitPrice-${id}`).value);
+
+      if (!newMaterial || newQty <= 0 || isNaN(newUnitPrice) || newUnitPrice < 0) {
+        alert('Please enter valid item details, a count greater than 0, and a valid price.');
+        return;
+      }
+
+      const newAmount = Number((newQty * newUnitPrice).toFixed(2));
+
+      const { error } = await supabaseClient
+        .from('orders')
+        .update({
+          material: newMaterial,
+          quantity: newQty,
+          unitPrice: newUnitPrice,
+          amount: newAmount
+        })
+        .eq('id', id);
+
+      if (error) {
+        console.error('Error updating order:', error);
+        alert('Failed to update order: ' + error.message);
+      } else {
+        await loadOrders();
+        alert(`Order updated! New count: ${newQty}, New amount: ₹${newAmount.toFixed(2)}`);
+      }
     }
 
     function showReceipt(id) {
       const o = orders.find(x => x.id === id);
       if (!o) return;
-      alert(`Receipt\n\nService: ${o.service}\nName: ${o.name}\nMobile: ${o.mobile}\nDate: ${o.date}\nItem: ${o.material}\nQuantity: ${o.quantity}\nUnit Price: ₹${o.unitPrice}\nAmount: ₹${Number(o.amount).toFixed(2)}`);
+      alert(`Receipt\n\nService: ${o.service}\nName: ${o.name}\nMobile: ${o.mobile}\nDate: ${o.date}\nItem(s): ${o.material}\nCount / Quantity: ${o.quantity}\nUnit Price: ₹${o.unitPrice}\nAmount: ₹${Number(o.amount).toFixed(2)}`);
     }
 
     function showHome() {
@@ -296,6 +473,7 @@
     }
 
     function openOrderForm(service) {
+      draftItems = [];
       document.getElementById('homeDiv').style.display = 'none';
       const formDiv = document.getElementById('orderFormDiv');
       formDiv.style.display = 'block';
@@ -305,6 +483,7 @@
       currentClothList = (service === 'Ironing') ? ironingClothList : laundryClothList;
       form.reset();
       document.getElementById('unitPrice').textContent = '0';
+      document.getElementById('itemSubtotal').textContent = '0.00';
       document.getElementById('totalAmount').textContent = '0.00';
       document.getElementById('customClothDiv').style.display = 'none';
       document.getElementById('rateDiv').style.display = 'none';
@@ -313,6 +492,7 @@
       document.getElementById('orderDate').value = today;
       populateClothSelect();
       onClothChange();
+      renderDraftItems();
     }
 
     async function openSearch() {
@@ -358,11 +538,20 @@
       </div>
       <div id="rateDiv" class="field" style="display:none;">
         <label>Rate Type</label>
-        <input type="radio" id="rateDC" name="rateOption" value="dc" checked> <label for="rateDC">DC Rate</label>
-        <input type="radio" id="ratePL" name="rateOption" value="pl"> <label for="ratePL">PL Rate</label>
+        <input type="radio" id="rateDC" name="rateOption" value="dc" checked> <label for="rateDC" class="inline-label">DC Rate</label>
+        <input type="radio" id="ratePL" name="rateOption" value="pl"> <label for="ratePL" class="inline-label">PL Rate</label>
       </div>
       <div class="field"><label>Quantity</label><input type="number" id="quantity" min="1" value="1" required></div>
-      <div class="field"><strong>Unit Price (₹): </strong><span id="unitPrice">0</span></div>
+      <div class="field"><strong>Unit Price (₹): </strong><span id="unitPrice">0</span> • <strong>Item Subtotal (₹): </strong><span id="itemSubtotal">0.00</span></div>
+
+      <button type="button" class="secondary" onclick="addItemToOrder()">+ Add Next Item</button>
+
+      <div id="draftItemsBox" class="cart-box" style="display:none;">
+        <div style="font-weight:bold; margin-bottom:6px;">Added Items in This Order:</div>
+        <div id="draftItemsList"></div>
+        <div style="margin-top:8px; font-weight:bold;">Items Total (₹): <span id="draftItemsTotal">0.00</span></div>
+      </div>
+
       <div class="field total"><strong>Total Amount (₹): </strong><span id="totalAmount">0.00</span></div>
       <button type="button" class="primary" onclick="saveOrder()">Save Order</button>
       <input type="button" class="link" value="Back" onclick="showHome()">
