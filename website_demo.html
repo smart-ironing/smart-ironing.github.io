@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Laundry & Ironing App (Web Demo)</title>
+<style>
+  body {font-family: Arial, sans-serif; margin:0; padding:0; background:#f5f5f5;}
+  .container {max-width:420px; margin:40px auto; background:#fff; padding:20px; border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,.1);}
+  h1 {text-align:center; color:#3f51b5;}
+  button, input[type=button] {width:100%; padding:12px; margin:8px 0; font-size:16px; border:none; border-radius:4px; cursor:pointer;}
+  .primary {background:#3f51b5; color:#fff;}
+  .secondary {background:#ff9800; color:#fff;}
+  .link {background:none; color:#3f51b5; text-decoration:underline; padding:0;}
+  .field {margin-bottom:12px;}
+  label {display:block; margin-bottom:4px; font-weight:bold;}
+  input, select, textarea {width:100%; padding:8px; box-sizing:border-box;}
+  .total {font-weight:bold; margin-top:8px;}
+</style>
+<script>
+// ---------- Data persistence ----------
+let orders = [];
+const STORAGE_KEY = 'laundryOrders';
+function loadOrders(){
+  const json = localStorage.getItem(STORAGE_KEY);
+  if (json){
+    try{orders = JSON.parse(json);}catch(e){orders = [];}
+  }
+}
+function saveOrders(){
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(orders));
+}
+loadOrders();
+
+// ---------- Item lists ----------
+const laundryClothList = [
+  {name:'Shirt', dc:90, pl:60},
+  {name:'Juba Polyster', dc:150, pl:100},
+  {name:'Dhothi', dc:80, pl:60},
+  {name:'Pants', dc:90, pl:70},
+  {name:'Saree', dc:150, pl:120},
+  {name:'Kerala Set Mundu', dc:150, pl:120},
+  {name:'Blouse', dc:50, pl:35},
+  {name:'Under Skirt', dc:60, pl:30},
+  {name:'Under garments', dc:60, pl:30},
+  {name:'Salwar Kammes Set', dc:150, pl:100},
+  {name:'Salwar Kammes Top', dc:90, pl:60},
+  {name:'Salwar Karnmes Bottom', dc:50, pl:30},
+  {name:'Salwar Kammes Shawl', dc:60, pl:30},
+  {name:'Nighty', dc:60, pl:30},
+  {name:'Bed Sheet Single', dc:75, pl:60},
+  {name:'Bed Sheet Double', dc:90, pl:80},
+  {name:'Piliow Case', dc:40, pl:30},
+  {name:'Bath Toweis', dc:40, pl:30},
+  {name:'Curtains Single / Panel', dc:150, pl:125},
+  {name:'Curtains double / Panel with Lining', dc:200, pl:175},
+  {name:'Blankets Single', dc:210, pl:125},
+  {name:'Blankets Double', dc:250, pl:175},
+  {name:'Comforter', dc:225, pl:175},
+  {name:'Other services', dc:210, pl:0},
+  {name:'Others', price:0}
+];
+const ironingClothList = [
+  {name:'Saree', price:40},
+  {name:'Pant', price:20},
+  {name:'Shirt', price:20},
+  {name:'Churidar', price:35},
+  {name:'Top', price:20},
+  {name:'Jeans', price:20},
+  {name:'Blouse', price:15},
+  {name:'Dothi', price:20},
+  {name:'Suit', price:50},
+  {name:'Others', price:0}
+];
+let currentClothList = laundryClothList;
+
+function populateClothSelect(){
+  const select = document.getElementById('clothSelect');
+  select.innerHTML='';
+  currentClothList.forEach(item=>{
+    const opt = document.createElement('option');
+    opt.value = item.name;
+    opt.textContent = `${item.name}`;
+    select.appendChild(opt);
+  });
+}
+
+function handleRateChange(){
+  const select = document.getElementById('clothSelect');
+  const chosen = select.value;
+  if (chosen==='Others') return;
+  const item = currentClothList.find(c=>c.name===chosen);
+  const selectedRate = document.querySelector('input[name="rateOption"]:checked').value;
+  const price = selectedRate==='dc' ? item.dc : item.pl;
+  const priceSpan = document.getElementById('unitPrice');
+  priceSpan.textContent = price !== undefined ? price : '0';
+  computeTotal();
+}
+
+function onClothChange(){
+  const select = document.getElementById('clothSelect');
+  const chosen = select.value;
+  const customDiv = document.getElementById('customClothDiv');
+  const rateDiv = document.getElementById('rateDiv');
+  const priceSpan = document.getElementById('unitPrice');
+  if (chosen === 'Others') {
+    customDiv.style.display = 'block';
+    rateDiv.style.display = 'none';
+    priceSpan.textContent = '0';
+  } else {
+    customDiv.style.display = 'none';
+    const item = currentClothList.find(c => c.name === chosen);
+    if (item && ('dc' in item)) {
+      // Laundry item – show rate options
+      rateDiv.style.display = 'block';
+      const selectedRate = document.querySelector('input[name="rateOption"]:checked').value;
+      const price = selectedRate === 'dc' ? item.dc : item.pl;
+      priceSpan.textContent = price !== undefined ? price : '0';
+    } else {
+      // Ironing item – no rate options
+      rateDiv.style.display = 'none';
+      priceSpan.textContent = item ? item.price : '0';
+    }
+  }
+  computeTotal();
+}
+
+function computeTotal(){
+  const qty = parseInt(document.getElementById('quantity').value) || 0;
+  const unitPrice = parseFloat(document.getElementById('unitPrice').textContent) || 0;
+  const total = qty * unitPrice;
+  document.getElementById('totalAmount').textContent = isNaN(total) ? '0' : total.toFixed(2);
+}
+
+function saveOrder(){
+  const service = document.getElementById('orderForm').dataset.service;
+  const name = document.getElementById('custName').value.trim();
+  const mobile = document.getElementById('custMobile').value.trim();
+  const date = document.getElementById('orderDate').value;
+  const cloth = document.getElementById('clothSelect').value;
+  const customName = document.getElementById('customName').value.trim();
+  const customPrice = parseFloat(document.getElementById('customPrice').value) || 0;
+  const quantity = parseInt(document.getElementById('quantity').value) || 0;
+  let materialDesc = cloth;
+  let unitPrice = 0;
+  if (cloth==='Others'){
+    materialDesc = customName || 'Other';
+    unitPrice = customPrice;
+  } else {
+    const item = currentClothList.find(c=>c.name===cloth);
+    const selectedRate = document.querySelector('input[name="rateOption"]:checked').value;
+    unitPrice = selectedRate==='dc' ? item.dc : item.pl;
+  }
+  const amount = unitPrice * quantity;
+  if (!name || !mobile || !date || !materialDesc || quantity<=0){
+    alert('Please fill all required fields and quantity must be > 0');
+    return;
+  }
+  const order = {id: Date.now(), service, name, mobile, date, material: materialDesc, quantity, unitPrice, amount};
+  orders.push(order);
+  saveOrders();
+  alert('Order saved');
+  showHome();
+}
+
+function performSearch(){
+  const q = document.getElementById('searchQuery').value.trim().toLowerCase();
+  const results = orders.filter(o=> o.name.toLowerCase().includes(q) || o.mobile.toLowerCase().includes(q));
+  const container = document.getElementById('searchResults');
+  container.innerHTML='';
+  if (results.length===0){
+    container.textContent='No results';
+    return;
+  }
+  results.forEach(o=>{
+    const div = document.createElement('div');
+    div.style.border='1px solid #ccc';
+    div.style.padding='8px';
+    div.style.marginBottom='6px';
+    div.innerHTML = `<strong>${o.name}</strong> – ${o.mobile}<br>
+                     ${o.service} on ${o.date}<br>
+                     ${o.material} × ${o.quantity} @ ₹${o.unitPrice} = ₹${o.amount.toFixed(2)}
+                     <button onclick="showReceipt(${o.id})">View Receipt</button>`;
+    container.appendChild(div);
+  });
+}
+
+function showReceipt(id){
+  const o = orders.find(x=>x.id===id);
+  if(!o) return;
+  alert(`Receipt\n\nService: ${o.service}\nName: ${o.name}\nMobile: ${o.mobile}\nDate: ${o.date}\nItem: ${o.material}\nQuantity: ${o.quantity}\nUnit Price: ₹${o.unitPrice}\nAmount: ₹${o.amount.toFixed(2)}`);
+}
+
+function showHome(){
+  document.getElementById('orderFormDiv').style.display='none';
+  document.getElementById('searchDiv').style.display='none';
+  document.getElementById('homeDiv').style.display='block';
+}
+
+function openOrderForm(service){
+  document.getElementById('homeDiv').style.display='none';
+  const formDiv = document.getElementById('orderFormDiv');
+  formDiv.style.display='block';
+  const form = document.getElementById('orderForm');
+  form.dataset.service = service;
+  document.getElementById('formTitle').textContent = `${service} Order`;
+  currentClothList = (service==='Ironing') ? ironingClothList : laundryClothList;
+  form.reset();
+  document.getElementById('unitPrice').textContent='0';
+  document.getElementById('totalAmount').textContent='0.00';
+  document.getElementById('customClothDiv').style.display='none';
+  document.getElementById('rateDiv').style.display='none';
+  // Reset rate to DC by default
+  document.getElementById('rateDC').checked = true;
+  const today = new Date().toISOString().split('T')[0];
+  document.getElementById('orderDate').value = today;
+  populateClothSelect();
+  // Set initial price for the default selected item (e.g., Saree)
+  onClothChange();
+}
+
+function openSearch(){
+  document.getElementById('homeDiv').style.display='none';
+  document.getElementById('searchDiv').style.display='block';
+  document.getElementById('searchResults').innerHTML='';
+  document.getElementById('searchQuery').value='';
+}
+
+window.addEventListener('load',()=>{
+  populateClothSelect();
+  document.getElementById('clothSelect').addEventListener('change', onClothChange);
+  document.getElementById('quantity').addEventListener('input', computeTotal);
+  document.getElementById('customPrice').addEventListener('input', computeTotal);
+  // Rate option change listener
+  document.querySelectorAll('input[name="rateOption"]').forEach(r=>{
+    r.addEventListener('change', handleRateChange);
+  });
+});
+</script>
+</head>
+<body>
+<div id="homeDiv" class="container">
+  <h1>Welcome</h1>
+  <button class="primary" onclick="openOrderForm('Laundry')">Laundry</button>
+  <button class="secondary" onclick="openOrderForm('Ironing')">Ironing</button>
+  <input type="button" class="link" value="Search Orders" onclick="openSearch()">
+</div>
+
+<div id="orderFormDiv" class="container" style="display:none;">
+  <h2 id="formTitle"></h2>
+  <form id="orderForm" class="field">
+    <div class="field"><label>Customer Name</label><input type="text" id="custName"></div>
+    <div class="field"><label>Mobile Number <span style="color:red">*</span></label><input type="text" id="custMobile" required></div>
+    <div class="field"><label>Date</label><input type="date" id="orderDate" required></div>
+    <div class="field"><label>Item</label><select id="clothSelect"></select></div>
+    <div id="customClothDiv" class="field" style="display:none;">
+      <label>Custom Item Name</label><input type="text" id="customName" placeholder="e.g., Silk Scarf">
+      <label>Custom Unit Price (₹)</label><input type="number" step="0.01" id="customPrice" placeholder="e.g., 150">
+    </div>
+    <div id="rateDiv" class="field" style="display:none;">
+      <label>Rate Type</label>
+      <input type="radio" id="rateDC" name="rateOption" value="dc" checked> <label for="rateDC">DC Rate</label>
+      <input type="radio" id="ratePL" name="rateOption" value="pl"> <label for="ratePL">PL Rate</label>
+    </div>
+    <div class="field"><label>Quantity</label><input type="number" id="quantity" min="1" value="1" required></div>
+    <div class="field"><strong>Unit Price (₹): </strong><span id="unitPrice">0</span></div>
+    <div class="field total"><strong>Total Amount (₹): </strong><span id="totalAmount">0.00</span></div>
+    <button type="button" class="primary" onclick="saveOrder()">Save Order</button>
+    <input type="button" class="link" value="Back" onclick="showHome()">
+  </form>
+</div>
+
+<div id="searchDiv" class="container" style="display:none;">
+  <h2>Search Orders</h2>
+  <input type="text" id="searchQuery" placeholder="Enter name or mobile">
+  <button class="primary" onclick="performSearch()">Search</button>
+  <div id="searchResults" style="margin-top:12px;"></div>
+  <input type="button" class="link" value="Back" onclick="showHome()">
+</div>
+</body>
+</html>
