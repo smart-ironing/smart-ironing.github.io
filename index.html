@@ -50,6 +50,12 @@
     .receipt-sl {color:#d32f2f; font-size:20px; font-weight:bold; text-align:right; margin-bottom:8px;}
     .receipt-title {margin:0 0 12px 0; color:#3f51b5; font-size:20px;}
     .receipt-row {margin-bottom:8px; font-size:15px;}
+    .report-table {width:100%; border-collapse:collapse; margin-top:12px; font-size:13px;}
+    .report-table th, .report-table td {border:1px solid #ccc; padding:8px 6px; text-align:right;}
+    .report-table th {background:#3f51b5; color:#fff; text-align:center;}
+    .report-table td:first-child {text-align:left; font-weight:bold;}
+    .report-table tr:nth-child(even) {background:#f9f9f9;}
+    .report-table tr.total-row {background:#e8eaf6; font-weight:bold;}
     @media (max-width: 600px) {
       .container {margin:0; max-width:100%; min-height:100vh; border-radius:0; box-shadow:none;}
     }
@@ -650,7 +656,157 @@
     function showHome() {
       document.getElementById('orderFormDiv').style.display = 'none';
       document.getElementById('searchDiv').style.display = 'none';
+      document.getElementById('adminLoginDiv').style.display = 'none';
+      document.getElementById('adminReportDiv').style.display = 'none';
       document.getElementById('homeDiv').style.display = 'block';
+    }
+
+    // ---------- Admin Login & Monthly Excel Report ----------
+    const ADMIN_USER = 'admin';
+    const ADMIN_PASS = 'admin123';
+    let isAdminLoggedIn = false;
+
+    function openAdminLogin() {
+      document.getElementById('homeDiv').style.display = 'none';
+      if (isAdminLoggedIn) {
+        openAdminReport();
+        return;
+      }
+      document.getElementById('adminUser').value = '';
+      document.getElementById('adminPass').value = '';
+      document.getElementById('adminLoginError').textContent = '';
+      document.getElementById('adminLoginDiv').style.display = 'block';
+    }
+
+    async function handleAdminLogin() {
+      const user = document.getElementById('adminUser').value.trim();
+      const pass = document.getElementById('adminPass').value;
+      const errEl = document.getElementById('adminLoginError');
+
+      if (user === ADMIN_USER && pass === ADMIN_PASS) {
+        isAdminLoggedIn = true;
+        errEl.textContent = '';
+        document.getElementById('adminLoginDiv').style.display = 'none';
+        await openAdminReport();
+      } else {
+        errEl.textContent = 'Invalid username or password.';
+      }
+    }
+
+    function logoutAdmin() {
+      isAdminLoggedIn = false;
+      showHome();
+    }
+
+    function getMonthlySummaryData() {
+      const byMonth = {};
+      orders.forEach(o => {
+        const month = (o.date && String(o.date).length >= 7) ? String(o.date).slice(0, 7) : 'Unknown';
+        if (!byMonth[month]) {
+          byMonth[month] = { month, count: 0, laundry: 0, ironing: 0, total: 0 };
+        }
+        const amt = Number(o.amount) || 0;
+        byMonth[month].count += 1;
+        if (o.service === 'Ironing') {
+          byMonth[month].ironing += amt;
+        } else {
+          byMonth[month].laundry += amt;
+        }
+        byMonth[month].total += amt;
+      });
+      return Object.values(byMonth).sort((a, b) => b.month.localeCompare(a.month));
+    }
+
+    async function openAdminReport() {
+      document.getElementById('adminReportDiv').style.display = 'block';
+      await loadOrders();
+      renderMonthlyReport();
+    }
+
+    function renderMonthlyReport() {
+      const container = document.getElementById('monthlyReportTable');
+      const rows = getMonthlySummaryData();
+
+      if (rows.length === 0) {
+        container.innerHTML = '<p style="text-align:center; color:#666;">No orders found.</p>';
+        return;
+      }
+
+      let grandCount = 0;
+      let grandLaundry = 0;
+      let grandIroning = 0;
+      let grandTotal = 0;
+
+      let html = `
+        <table class="report-table">
+          <thead>
+            <tr>
+              <th>Month</th>
+              <th>Orders</th>
+              <th>Laundry (₹)</th>
+              <th>Ironing (₹)</th>
+              <th>Total (₹)</th>
+            </tr>
+          </thead>
+          <tbody>
+      `;
+
+      rows.forEach(r => {
+        grandCount += r.count;
+        grandLaundry += r.laundry;
+        grandIroning += r.ironing;
+        grandTotal += r.total;
+        html += `
+          <tr>
+            <td>${escapeHtml(r.month)}</td>
+            <td>${r.count}</td>
+            <td>${r.laundry.toFixed(2)}</td>
+            <td>${r.ironing.toFixed(2)}</td>
+            <td>${r.total.toFixed(2)}</td>
+          </tr>
+        `;
+      });
+
+      html += `
+          <tr class="total-row">
+            <td>Grand Total</td>
+            <td>${grandCount}</td>
+            <td>${grandLaundry.toFixed(2)}</td>
+            <td>${grandIroning.toFixed(2)}</td>
+            <td>${grandTotal.toFixed(2)}</td>
+          </tr>
+        </tbody>
+      </table>
+      `;
+      container.innerHTML = html;
+    }
+
+    function exportMonthlyReportCSV() {
+      const rows = getMonthlySummaryData();
+      if (rows.length === 0) {
+        alert('No data to export.');
+        return;
+      }
+      const lines = ['Month,Orders,Laundry (INR),Ironing (INR),Total Earned (INR)'];
+      let grandCount = 0, grandLaundry = 0, grandIroning = 0, grandTotal = 0;
+      rows.forEach(r => {
+        grandCount += r.count;
+        grandLaundry += r.laundry;
+        grandIroning += r.ironing;
+        grandTotal += r.total;
+        lines.push(`${r.month},${r.count},${r.laundry.toFixed(2)},${r.ironing.toFixed(2)},${r.total.toFixed(2)}`);
+      });
+      lines.push(`Grand Total,${grandCount},${grandLaundry.toFixed(2)},${grandIroning.toFixed(2)},${grandTotal.toFixed(2)}`);
+
+      const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'monthly-earnings-report.csv';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
     }
 
     async function openOrderForm(service) {
@@ -707,6 +863,7 @@
     <button class="primary" onclick="openOrderForm('Laundry')">Laundry</button>
     <button class="secondary" onclick="openOrderForm('Ironing')">Ironing</button>
     <input type="button" class="link" value="Search Orders" onclick="openSearch()">
+    <input type="button" class="link" value="Admin Login (Monthly Report)" onclick="openAdminLogin()">
     <button class="danger" onclick="deleteOldOrders()">Clean Old Orders (30+ Days)</button>
   </div>
 
@@ -759,6 +916,22 @@
       <div id="receiptBody"></div>
       <button type="button" class="primary" onclick="closeReceipt()" style="margin-top:14px;">Close</button>
     </div>
+  </div>
+
+  <div id="adminLoginDiv" class="container" style="display:none;">
+    <h2>Admin Login</h2>
+    <div class="field"><label>Username</label><input type="text" id="adminUser" placeholder="Enter username"></div>
+    <div class="field"><label>Password</label><input type="password" id="adminPass" placeholder="Enter password"></div>
+    <div id="adminLoginError" style="color:#e53935; font-size:13px; margin-bottom:8px;"></div>
+    <button type="button" class="primary" onclick="handleAdminLogin()">Login</button>
+    <input type="button" class="link" value="Back" onclick="showHome()">
+  </div>
+
+  <div id="adminReportDiv" class="container" style="display:none; max-width:560px;">
+    <h2>Monthly Earnings Report</h2>
+    <div id="monthlyReportTable" style="overflow-x:auto;"></div>
+    <button type="button" class="success" onclick="exportMonthlyReportCSV()" style="margin-top:14px;">Export to Excel (CSV)</button>
+    <button type="button" class="secondary" onclick="logoutAdmin()">Logout</button>
   </div>
 </body>
 </html>
