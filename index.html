@@ -26,7 +26,7 @@
     .cart-box {border:1px solid #ddd; background:#fafafa; border-radius:6px; padding:10px; margin:12px 0;}
     .cart-item {display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-bottom:1px solid #eee; font-size:14px;}
     .cart-item:last-child {border-bottom:none;}
-    .remove-btn {background:#e53935; color:#fff; border:none; border-radius:4px; padding:4px 8px; font-size:12px; cursor:pointer; width:auto; margin:0;}
+    .remove-btn {background:#e53935; color:#fff; border:none; border:none; border-radius:4px; padding:4px 8px; font-size:12px; cursor:pointer; width:auto; margin:0;}
     .edit-panel {background:#f9fbe7; border:1px solid #cddc39; border-radius:6px; padding:10px; margin-top:8px;}
     .hint {font-size:12px; color:#555; margin:-4px 0 8px 0;}
   </style>
@@ -426,6 +426,9 @@
         div.style.padding = '10px';
         div.style.marginBottom = '10px';
         const amountStr = (o.amount !== undefined && o.amount !== null) ? Number(o.amount).toFixed(2) : '0.00';
+        const currentUnitPrice = (o.unitPrice !== undefined && o.unitPrice !== null)
+          ? o.unitPrice
+          : ((o.unit_price !== undefined && o.unit_price !== null) ? o.unit_price : 0);
         const hasBreakdown = Boolean(parseBreakdownFromMaterial(o.material));
 
         div.innerHTML = `
@@ -439,10 +442,10 @@
             <input type="text" id="editMaterial-${o.id}" value="${escapeHtml(o.material)}" oninput="syncEditInputs(${o.id})" style="margin-bottom:4px;">
             <div class="hint">Tip: Change any count inside parentheses, e.g. Saree (1×₹40) → Saree (3×₹40), to recalculate the price automatically.</div>
             <label style="font-size:13px;">Cloth Count (Quantity)</label>
-            <input type="number" id="editQty-${o.id}" min="1" value="${o.quantity}" ${hasBreakdown ? 'readonly style="background:#eee; margin-bottom:8px;"' : 'style="margin-bottom:8px;"'} oninput="previewEditedAmount(${o.id}, false)">
+            <input type="number" id="editQty-${o.id}" min="1" value="${o.quantity}" ${hasBreakdown ? 'readonly style="background:#eee; margin-bottom:8px;"' : 'style="margin-bottom:8px;"'} oninput="previewEditedAmount(${o.id})">
             <div id="editUnitPriceWrap-${o.id}" style="${hasBreakdown ? 'display:none;' : ''} margin-bottom:8px;">
               <label style="font-size:13px;">Unit Price (₹)</label>
-              <input type="number" step="0.01" id="editUnitPrice-${o.id}" min="0" value="${o.unitPrice}" oninput="previewEditedAmount(${o.id}, false)">
+              <input type="number" step="0.01" id="editUnitPrice-${o.id}" min="0" value="${currentUnitPrice}" oninput="previewEditedAmount(${o.id})">
             </div>
             <div style="font-size:14px; margin-bottom:8px;">
               <strong>Updated Amount (₹): </strong><span id="editPreviewAmount-${o.id}">${amountStr}</span>
@@ -490,7 +493,7 @@
         qtyInput.readOnly = false;
         qtyInput.style.background = '#fff';
         unitWrap.style.display = 'block';
-        previewEditedAmount(id, false);
+        previewEditedAmount(id);
       }
     }
 
@@ -514,23 +517,40 @@
         return;
       }
 
-      const { error } = await supabaseClient
+      const targetOrder = orders.find(x => String(x.id) === String(id));
+      const matchId = targetOrder ? targetOrder.id : id;
+      const usesSnakeCaseUnitPrice = targetOrder && ('unit_price' in targetOrder) && !('unitPrice' in targetOrder);
+
+      const updatePayload = {
+        material: newMaterial,
+        quantity: calc.quantity,
+        amount: calc.amount
+      };
+      if (usesSnakeCaseUnitPrice) {
+        updatePayload.unit_price = calc.unitPrice;
+      } else {
+        updatePayload.unitPrice = calc.unitPrice;
+      }
+
+      const { data, error } = await supabaseClient
         .from('orders')
-        .update({
-          material: newMaterial,
-          quantity: calc.quantity,
-          unitPrice: calc.unitPrice,
-          amount: calc.amount
-        })
-        .eq('id', id);
+        .update(updatePayload)
+        .eq('id', matchId)
+        .select();
 
       if (error) {
         console.error('Error updating order:', error);
         alert('Failed to update order: ' + error.message);
-      } else {
-        await loadOrders();
-        alert(`Order updated! New count: ${calc.quantity}, New amount: ₹${calc.amount.toFixed(2)}`);
+        return;
       }
+
+      if (!data || data.length === 0) {
+        alert('Update did not save to Supabase (0 rows matched or UPDATE permission is blocked by Row Level Security). Check your Supabase UPDATE policy on the orders table.');
+        return;
+      }
+
+      await loadOrders();
+      alert(`Order updated! New count: ${calc.quantity}, New amount: ₹${calc.amount.toFixed(2)}`);
     }
 
     function showReceipt(id) {
