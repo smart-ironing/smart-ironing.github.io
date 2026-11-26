@@ -27,7 +27,6 @@
     const supabaseKey = "sb_publishable_3sWev9-qMw38MDdl1CeS4g_maISPvi4";
     const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
 
-    // Load all shared orders from Supabase
     async function loadOrders() {
       const statusEl = document.getElementById('dbStatus');
       if (statusEl) statusEl.textContent = 'Syncing with cloud database...';
@@ -43,14 +42,15 @@
       } else {
         orders = data || [];
         if (statusEl) statusEl.textContent = `Connected • ${orders.length} shared orders`;
-        // Refresh search results automatically if search screen is open
         if (document.getElementById('searchDiv').style.display === 'block') {
-          performSearch();
+          const currentQuery = document.getElementById('searchQuery').value.trim();
+          if (currentQuery !== '') {
+            performSearch();
+          }
         }
       }
     }
 
-    // Real-time sync across all devices (Supabase v2 syntax)
     supabaseClient
       .channel('public:orders')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => {
@@ -58,7 +58,6 @@
       })
       .subscribe();
 
-    // Save a new order to the common Supabase database
     async function saveOrderToSupabase(order) {
       const { error } = await supabaseClient
         .from('orders')
@@ -74,11 +73,10 @@
       }
     }
 
-    // Delete orders strictly older than 30 days based on their order date
     async function deleteOldOrders() {
       const cutoffDate = new Date();
       cutoffDate.setDate(cutoffDate.getDate() - 30);
-      const cutoffStr = cutoffDate.toISOString().split('T')[0]; // Format: YYYY-MM-DD
+      const cutoffStr = cutoffDate.toISOString().split('T')[0];
 
       const confirmDelete = confirm(
         `This will permanently delete all orders dated before ${cutoffStr} (strictly older than 30 days).\n\nDo you want to continue?`
@@ -251,16 +249,22 @@
 
     function performSearch() {
       const q = document.getElementById('searchQuery').value.trim().toLowerCase();
+      const container = document.getElementById('searchResults');
+      container.innerHTML = '';
+
+      if (q === '') {
+        container.textContent = 'Enter a name or mobile number to search.';
+        return;
+      }
+
       const results = orders.filter(o => {
         const name = (o.name || '').toLowerCase();
         const mobile = (o.mobile || '').toLowerCase();
         return name.includes(q) || mobile.includes(q);
       });
 
-      const container = document.getElementById('searchResults');
-      container.innerHTML = '';
       if (results.length === 0) {
-        container.textContent = 'No results found in shared database.';
+        container.textContent = 'No matching orders found.';
         return;
       }
 
@@ -315,8 +319,8 @@
       document.getElementById('homeDiv').style.display = 'none';
       document.getElementById('searchDiv').style.display = 'block';
       document.getElementById('searchQuery').value = '';
-      await loadOrders(); // Fetch latest orders from all devices before displaying
-      performSearch();
+      document.getElementById('searchResults').innerHTML = '';
+      await loadOrders();
     }
 
     window.addEventListener('load', () => {
