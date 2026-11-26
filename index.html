@@ -164,21 +164,33 @@ function saveOrder(){
 
 function performSearch(){
   const q = document.getElementById('searchQuery').value.trim().toLowerCase();
-  const results = orders.filter(o=> o.name.toLowerCase().includes(q) || o.mobile.toLowerCase().includes(q));
+
+  // Safe filter – works even if name or mobile are undefined/null
+  const results = orders.filter(o => {
+    const name   = (o.name   || '').toLowerCase();
+    const mobile = (o.mobile || '').toLowerCase();
+    return name.includes(q) || mobile.includes(q);
+  });
+
   const container = document.getElementById('searchResults');
-  container.innerHTML='';
-  if (results.length===0){
-    container.textContent='No results';
+  container.innerHTML = '';
+
+  if (results.length === 0){
+    container.textContent = 'No results';
     return;
   }
-  results.forEach(o=>{
+
+  results.forEach(o => {
     const div = document.createElement('div');
-    div.style.border='1px solid #ccc';
-    div.style.padding='8px';
-    div.style.marginBottom='6px';
+    div.style.border = '1px solid #ccc';
+    div.style.padding = '8px';
+    div.style.marginBottom = '6px';
+    const amountStr = (o.amount !== undefined && o.amount !== null)
+                      ? o.amount.toFixed(2) : '0.00';
     div.innerHTML = `<strong>${o.name}</strong> – ${o.mobile}<br>
                      ${o.service} on ${o.date}<br>
-                     ${o.material} × ${o.quantity} @ ₹${o.unitPrice} = ₹${o.amount.toFixed(2)}
+                     ${o.material} × ${o.quantity} @ ₹${o.unitPrice}
+                     = ₹${amountStr}
                      <button onclick="showReceipt(${o.id})">View Receipt</button>`;
     container.appendChild(div);
   });
