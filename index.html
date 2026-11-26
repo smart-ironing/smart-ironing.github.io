@@ -146,9 +146,17 @@ function saveOrder(){
     materialDesc = customName || 'Other';
     unitPrice = customPrice;
   } else {
-    const item = currentClothList.find(c=>c.name===cloth);
-    const selectedRate = document.querySelector('input[name="rateOption"]:checked').value;
-    unitPrice = selectedRate==='dc' ? item.dc : item.pl;
+    const item = currentClothList.find(c => c.name===cloth);
+    // ----- SAFE LOGIC -----
+    if (item && ('dc' in item) && ('pl' in item)) {
+      const selectedRate = document.querySelector('input[name="rateOption"]:checked').value;
+      unitPrice = selectedRate==='dc' ? item.dc : item.pl;
+    } else if (item && ('price' in item)) {
+      unitPrice = item.price;
+    } else {
+      unitPrice = 0;
+    }
+    // ----------------------
   }
   const amount = unitPrice * quantity;
   if (!name || !mobile || !date || !materialDesc || quantity<=0){
