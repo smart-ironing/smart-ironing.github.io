@@ -563,9 +563,12 @@
       const orderIdx = orders.findIndex(o => o.id === id);
       if (orderIdx === -1) return;
       const order = orders[orderIdx];
+      // Hide the receipt modal so the form is visible
+      const receiptModal = document.getElementById('receiptModal');
+      if (receiptModal) receiptModal.style.display = 'none';
       // Prepare draft items with current order details
       draftItems = [];
-      // If order has a material breakdown, push as a single item
+      // Push the existing order as a draft item (so it appears in the list)
       draftItems.push({
         material: order.material,
         quantity: order.quantity,
@@ -574,6 +577,30 @@
       });
       // Open order form with same service to allow adding more items
       openOrderForm(order.service);
+      // Pre‑fill form fields with the existing order values
+      document.getElementById('custName').value = order.name || '';
+      document.getElementById('custMobile').value = order.mobile || '';
+      document.getElementById('orderDate').value = order.date || '';
+      // Set the cloth selector (or custom) and trigger UI update
+      const select = document.getElementById('clothSelect');
+      if (select) {
+        select.value = order.material;
+        onClothChange();
+      }
+      // Set quantity
+      document.getElementById('quantity').value = order.quantity || 1;
+      // Set unit price display (if applicable)
+      const unitPriceSpan = document.getElementById('unitPrice');
+      if (unitPriceSpan) unitPriceSpan.textContent = order.unitPrice || order.unit_price || 0;
+      // If the material has DC/PL rates, select the matching radio button
+      if (currentClothList.find(c => c.name === order.material && c.dc === (order.unitPrice || order.unit_price))) {
+        document.getElementById('rateDC').checked = true;
+      } else if (currentClothList.find(c => c.name === order.material && c.pl === (order.unitPrice || order.unit_price))) {
+        document.getElementById('ratePL').checked = true;
+      }
+      // Re‑compute totals and render the draft list
+      computeTotal();
+      renderDraftItems();
       // Set SL No to existing order's SL No
       activeSlNo = order.sl_no || order.slNo || computeNextSlNo();
     }
@@ -784,9 +811,12 @@
       const orderIdx = orders.findIndex(o => o.id === id);
       if (orderIdx === -1) return;
       const order = orders[orderIdx];
+      // Hide the receipt modal so the form is visible
+      const receiptModal = document.getElementById('receiptModal');
+      if (receiptModal) receiptModal.style.display = 'none';
       // Prepare draft items with current order details
       draftItems = [];
-      // If order has a material breakdown, push as a single item
+      // Push the existing order as a draft item (so it appears in the list)
       draftItems.push({
         material: order.material,
         quantity: order.quantity,
@@ -795,6 +825,30 @@
       });
       // Open order form with same service to allow adding more items
       openOrderForm(order.service);
+      // Pre‑fill form fields with the existing order values
+      document.getElementById('custName').value = order.name || '';
+      document.getElementById('custMobile').value = order.mobile || '';
+      document.getElementById('orderDate').value = order.date || '';
+      // Set the cloth selector (or custom) and trigger UI update
+      const select = document.getElementById('clothSelect');
+      if (select) {
+        select.value = order.material;
+        onClothChange();
+      }
+      // Set quantity
+      document.getElementById('quantity').value = order.quantity || 1;
+      // Set unit price display (if applicable)
+      const unitPriceSpan = document.getElementById('unitPrice');
+      if (unitPriceSpan) unitPriceSpan.textContent = order.unitPrice || order.unit_price || 0;
+      // If the material has DC/PL rates, select the matching radio button
+      if (currentClothList.find(c => c.name === order.material && c.dc === (order.unitPrice || order.unit_price))) {
+        document.getElementById('rateDC').checked = true;
+      } else if (currentClothList.find(c => c.name === order.material && c.pl === (order.unitPrice || order.unit_price))) {
+        document.getElementById('ratePL').checked = true;
+      }
+      // Re‑compute totals and render the draft list
+      computeTotal();
+      renderDraftItems();
       // Set SL No to existing order's SL No
       activeSlNo = order.sl_no || order.slNo || computeNextSlNo();
     }
@@ -1049,9 +1103,12 @@
       const orderIdx = orders.findIndex(o => o.id === id);
       if (orderIdx === -1) return;
       const order = orders[orderIdx];
+      // Hide the receipt modal so the form is visible
+      const receiptModal = document.getElementById('receiptModal');
+      if (receiptModal) receiptModal.style.display = 'none';
       // Prepare draft items with current order details
       draftItems = [];
-      // If order has a material breakdown, push as a single item
+      // Push the existing order as a draft item (so it appears in the list)
       draftItems.push({
         material: order.material,
         quantity: order.quantity,
@@ -1060,6 +1117,30 @@
       });
       // Open order form with same service to allow adding more items
       openOrderForm(order.service);
+      // Pre‑fill form fields with the existing order values
+      document.getElementById('custName').value = order.name || '';
+      document.getElementById('custMobile').value = order.mobile || '';
+      document.getElementById('orderDate').value = order.date || '';
+      // Set the cloth selector (or custom) and trigger UI update
+      const select = document.getElementById('clothSelect');
+      if (select) {
+        select.value = order.material;
+        onClothChange();
+      }
+      // Set quantity
+      document.getElementById('quantity').value = order.quantity || 1;
+      // Set unit price display (if applicable)
+      const unitPriceSpan = document.getElementById('unitPrice');
+      if (unitPriceSpan) unitPriceSpan.textContent = order.unitPrice || order.unit_price || 0;
+      // If the material has DC/PL rates, select the matching radio button
+      if (currentClothList.find(c => c.name === order.material && c.dc === (order.unitPrice || order.unit_price))) {
+        document.getElementById('rateDC').checked = true;
+      } else if (currentClothList.find(c => c.name === order.material && c.pl === (order.unitPrice || order.unit_price))) {
+        document.getElementById('ratePL').checked = true;
+      }
+      // Re‑compute totals and render the draft list
+      computeTotal();
+      renderDraftItems();
       // Set SL No to existing order's SL No
       activeSlNo = order.sl_no || order.slNo || computeNextSlNo();
     }
