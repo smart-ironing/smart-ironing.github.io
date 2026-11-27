@@ -851,16 +851,20 @@
       const o = orders[idx];
       const slNo = explicitSl !== undefined ? explicitSl : getOrderSlNo(o, idx);
 
+      const rawMobile = (o.mobile || '').toString().trim();
+      const dialNumber = rawMobile.replace(/[^+\d]/g, '');
+
       document.getElementById('receiptSlNo').textContent = `SL No: ${slNo}`;
       document.getElementById('receiptBody').innerHTML = `
         <div class="receipt-row"><strong>Service:</strong> ${escapeHtml(o.service)}</div>
         <div class="receipt-row"><strong>Name:</strong> ${escapeHtml(o.name)}</div>
-        <div class="receipt-row"><strong>Mobile:</strong> ${escapeHtml(o.mobile)}</div>
+        <div class="receipt-row"><strong>Mobile:</strong> ${escapeHtml(o.mobile)}${dialNumber ? ` <a href="tel:${dialNumber}" class="small-btn success" style="text-decoration:none; border-radius:4px; margin-left:8px; padding:3px 10px;">Call</a>` : ''}</div>
         <div class="receipt-row"><strong>Date:</strong> ${escapeHtml(o.date)}</div>
         <div class="receipt-row"><strong>Item(s):</strong> ${escapeHtml(o.material)}</div>
         <div class="receipt-row"><strong>Count / Quantity:</strong> ${o.quantity}</div>
         <div class="receipt-row" style="font-size:17px;"><strong>Amount:</strong> ₹${Number(o.amount).toFixed(2)}</div>
       `;
+
       document.getElementById('receiptModal').style.display = 'flex';
     }
 
