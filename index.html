@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <meta charset="UTF-8">
@@ -20,44 +21,258 @@
     }
   </script>
   <style>
-    body {font-family: Arial, sans-serif; margin:0; padding:0; background:#f5f5f5;}
-    .container {max-width:440px; margin:30px auto; background:#fff; padding:20px; border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,.1);}
-    h1 {text-align:center; color:#3f51b5;}
-    button, input[type=button] {width:100%; padding:12px; margin:8px 0; font-size:16px; border:none; border-radius:4px; cursor:pointer;}
-    .primary {background:#3f51b5; color:#fff;}
-    .secondary {background:#ff9800; color:#fff;}
-    .success {background:#2e7d32; color:#fff;}
-    .danger {background:#e53935; color:#fff; font-size:14px; padding:10px; margin-top:20px;}
-    .small-btn {width:auto; padding:6px 10px; font-size:13px; margin:4px 4px 0 0; display:inline-block;}
-    .link {background:none; color:#3f51b5; text-decoration:underline; padding:0;}
-    .field {margin-bottom:12px;}
-    label {display:block; margin-bottom:4px; font-weight:bold;}
-    .inline-label {display:inline; font-weight:normal; margin-right:12px;}
-    input, select, textarea {width:100%; padding:8px; box-sizing:border-box;}
-    input[type=radio] {width:auto;}
-    .total {font-weight:bold; margin-top:8px; font-size:17px;}
-    .status {text-align:center; font-size:12px; color:#666; margin-bottom:10px;}
-    .cart-box {border:1px solid #ddd; background:#fafafa; border-radius:6px; padding:10px; margin:12px 0;}
-    .cart-item {display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-bottom:1px solid #eee; font-size:14px;}
-    .cart-item:last-child {border-bottom:none;}
-    .remove-btn {background:#e53935; color:#fff; border:none; border:none; border-radius:4px; padding:4px 8px; font-size:12px; cursor:pointer; width:auto; margin:0;}
-    .edit-panel {background:#f9fbe7; border:1px solid #cddc39; border-radius:6px; padding:10px; margin-top:8px;}
-    .hint {font-size:12px; color:#555; margin:-4px 0 8px 0;}
-    .sl-badge {font-size:18px; font-weight:bold; color:#d32f2f; margin-bottom:6px;}
-    .sl-inline {color:#d32f2f; font-weight:bold;}
-    .receipt-modal {position:fixed; inset:0; background:rgba(0,0,0,0.45); display:none; align-items:center; justify-content:center; padding:16px; z-index:999;}
-    .receipt-card {background:#fff; width:100%; max-width:380px; border-radius:8px; padding:20px; box-shadow:0 4px 16px rgba(0,0,0,0.2);}
-    .receipt-sl {color:#d32f2f; font-size:20px; font-weight:bold; text-align:right; margin-bottom:8px;}
-    .receipt-title {margin:0 0 12px 0; color:#3f51b5; font-size:20px;}
-    .receipt-row {margin-bottom:8px; font-size:15px;}
-    .report-table {width:100%; border-collapse:collapse; margin-top:12px; font-size:13px;}
-    .report-table th, .report-table td {border:1px solid #ccc; padding:8px 6px; text-align:right;}
-    .report-table th {background:#3f51b5; color:#fff; text-align:center;}
-    .report-table td:first-child {text-align:left; font-weight:bold;}
-    .report-table tr:nth-child(even) {background:#f9f9f9;}
-    .report-table tr.total-row {background:#e8eaf6; font-weight:bold;}
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      background: #f5f5f5;
+    }
+
+    .container {
+      max-width: 440px;
+      margin: 30px auto;
+      background: #fff;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, .1);
+    }
+
+    h1 {
+      text-align: center;
+      color: #3f51b5;
+    }
+
+    button,
+    input[type=button] {
+      width: 100%;
+      padding: 12px;
+      margin: 8px 0;
+      font-size: 16px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    .primary {
+      background: #3f51b5;
+      color: #fff;
+    }
+
+    .secondary {
+      background: #ff9800;
+      color: #fff;
+    }
+
+    .success {
+      background: #2e7d32;
+      color: #fff;
+    }
+
+    .danger {
+      background: #e53935;
+      color: #fff;
+      font-size: 14px;
+      padding: 10px;
+      margin-top: 20px;
+    }
+
+    .small-btn {
+      width: auto;
+      padding: 6px 10px;
+      font-size: 13px;
+      margin: 4px 4px 0 0;
+      display: inline-block;
+    }
+
+    .link {
+      background: none;
+      color: #3f51b5;
+      text-decoration: underline;
+      padding: 0;
+    }
+
+    .field {
+      margin-bottom: 12px;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 4px;
+      font-weight: bold;
+    }
+
+    .inline-label {
+      display: inline;
+      font-weight: normal;
+      margin-right: 12px;
+    }
+
+    input,
+    select,
+    textarea {
+      width: 100%;
+      padding: 8px;
+      box-sizing: border-box;
+    }
+
+    input[type=radio] {
+      width: auto;
+    }
+
+    .total {
+      font-weight: bold;
+      margin-top: 8px;
+      font-size: 17px;
+    }
+
+    .status {
+      text-align: center;
+      font-size: 12px;
+      color: #666;
+      margin-bottom: 10px;
+    }
+
+    .cart-box {
+      border: 1px solid #ddd;
+      background: #fafafa;
+      border-radius: 6px;
+      padding: 10px;
+      margin: 12px 0;
+    }
+
+    .cart-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 0;
+      border-bottom: 1px solid #eee;
+      font-size: 14px;
+    }
+
+    .cart-item:last-child {
+      border-bottom: none;
+    }
+
+    .remove-btn {
+      background: #e53935;
+      color: #fff;
+      border: none;
+      border: none;
+      border-radius: 4px;
+      padding: 4px 8px;
+      font-size: 12px;
+      cursor: pointer;
+      width: auto;
+      margin: 0;
+    }
+
+    .edit-panel {
+      background: #f9fbe7;
+      border: 1px solid #cddc39;
+      border-radius: 6px;
+      padding: 10px;
+      margin-top: 8px;
+    }
+
+    .hint {
+      font-size: 12px;
+      color: #555;
+      margin: -4px 0 8px 0;
+    }
+
+    .sl-badge {
+      font-size: 18px;
+      font-weight: bold;
+      color: #d32f2f;
+      margin-bottom: 6px;
+    }
+
+    .sl-inline {
+      color: #d32f2f;
+      font-weight: bold;
+    }
+
+    .receipt-modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.45);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      z-index: 999;
+    }
+
+    .receipt-card {
+      background: #fff;
+      width: 100%;
+      max-width: 380px;
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+    }
+
+    .receipt-sl {
+      color: #d32f2f;
+      font-size: 20px;
+      font-weight: bold;
+      text-align: right;
+      margin-bottom: 8px;
+    }
+
+    .receipt-title {
+      margin: 0 0 12px 0;
+      color: #3f51b5;
+      font-size: 20px;
+    }
+
+    .receipt-row {
+      margin-bottom: 8px;
+      font-size: 15px;
+    }
+
+    .report-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 12px;
+      font-size: 13px;
+    }
+
+    .report-table th,
+    .report-table td {
+      border: 1px solid #ccc;
+      padding: 8px 6px;
+      text-align: right;
+    }
+
+    .report-table th {
+      background: #3f51b5;
+      color: #fff;
+      text-align: center;
+    }
+
+    .report-table td:first-child {
+      text-align: left;
+      font-weight: bold;
+    }
+
+    .report-table tr:nth-child(even) {
+      background: #f9f9f9;
+    }
+
+    .report-table tr.total-row {
+      background: #e8eaf6;
+      font-weight: bold;
+    }
+
     @media (max-width: 600px) {
-      .container {margin:0; max-width:100%; min-height:100vh; border-radius:0; box-shadow:none;}
+      .container {
+        margin: 0;
+        max-width: 100%;
+        min-height: 100vh;
+        border-radius: 0;
+        box-shadow: none;
+      }
     }
   </style>
   <script>
@@ -159,11 +374,11 @@
 
     async function deleteOldOrders() {
       const cutoffDate = new Date();
-      cutoffDate.setDate(cutoffDate.getDate() - 30);
+      cutoffDate.setDate(cutoffDate.getDate() - 45);
       const cutoffStr = cutoffDate.toISOString().split('T')[0];
 
       const confirmDelete = confirm(
-        `This will permanently delete all orders dated before ${cutoffStr} (strictly older than 30 days).\n\nDo you want to continue?`
+        `This will permanently delete all orders dated before ${cutoffStr} (strictly older than 45 days).\n\nDo you want to continue?`
       );
       if (!confirmDelete) return;
 
@@ -178,50 +393,50 @@
         alert('Failed to delete old orders: ' + error.message);
       } else {
         const deletedCount = data ? data.length : 0;
-        alert(`Cleanup complete! Deleted ${deletedCount} order(s) older than 30 days.`);
+        alert(`Cleanup complete! Deleted ${deletedCount} order(s) older than 45 days.`);
         await loadOrders();
       }
     }
 
     // ---------- Item lists ----------
     const laundryClothList = [
-      {name:'Shirt', dc:90, pl:60},
-      {name:'Juba Polyster', dc:150, pl:100},
-      {name:'Dhothi', dc:80, pl:60},
-      {name:'Pants', dc:90, pl:70},
-      {name:'Saree', dc:150, pl:120},
-      {name:'Kerala Set Mundu', dc:150, pl:120},
-      {name:'Blouse', dc:50, pl:35},
-      {name:'Under Skirt', dc:60, pl:30},
-      {name:'Under garments', dc:60, pl:30},
-      {name:'Salwar Kammes Set', dc:150, pl:100},
-      {name:'Salwar Kammes Top', dc:90, pl:60},
-      {name:'Salwar Karnmes Bottom', dc:50, pl:30},
-      {name:'Salwar Kammes Shawl', dc:60, pl:30},
-      {name:'Nighty', dc:60, pl:30},
-      {name:'Bed Sheet Single', dc:75, pl:60},
-      {name:'Bed Sheet Double', dc:90, pl:80},
-      {name:'Piliow Case', dc:40, pl:30},
-      {name:'Bath Toweis', dc:40, pl:30},
-      {name:'Curtains Single / Panel', dc:150, pl:125},
-      {name:'Curtains double / Panel with Lining', dc:200, pl:175},
-      {name:'Blankets Single', dc:210, pl:125},
-      {name:'Blankets Double', dc:250, pl:175},
-      {name:'Comforter', dc:225, pl:175},
-      {name:'Other services', dc:210, pl:0},
-      {name:'Others', price:0}
+      { name: 'Shirt', dc: 90, pl: 60 },
+      { name: 'Juba Polyster', dc: 150, pl: 100 },
+      { name: 'Dhothi', dc: 80, pl: 60 },
+      { name: 'Pants', dc: 90, pl: 70 },
+      { name: 'Saree', dc: 150, pl: 120 },
+      { name: 'Kerala Set Mundu', dc: 150, pl: 120 },
+      { name: 'Blouse', dc: 50, pl: 35 },
+      { name: 'Under Skirt', dc: 60, pl: 30 },
+      { name: 'Under garments', dc: 60, pl: 30 },
+      { name: 'Salwar Kammes Set', dc: 150, pl: 100 },
+      { name: 'Salwar Kammes Top', dc: 90, pl: 60 },
+      { name: 'Salwar Karnmes Bottom', dc: 50, pl: 30 },
+      { name: 'Salwar Kammes Shawl', dc: 60, pl: 30 },
+      { name: 'Nighty', dc: 60, pl: 30 },
+      { name: 'Bed Sheet Single', dc: 75, pl: 60 },
+      { name: 'Bed Sheet Double', dc: 90, pl: 80 },
+      { name: 'Piliow Case', dc: 40, pl: 30 },
+      { name: 'Bath Toweis', dc: 40, pl: 30 },
+      { name: 'Curtains Single / Panel', dc: 150, pl: 125 },
+      { name: 'Curtains double / Panel with Lining', dc: 200, pl: 175 },
+      { name: 'Blankets Single', dc: 210, pl: 125 },
+      { name: 'Blankets Double', dc: 250, pl: 175 },
+      { name: 'Comforter', dc: 225, pl: 175 },
+      { name: 'Other services', dc: 210, pl: 0 },
+      { name: 'Others', price: 0 }
     ];
     const ironingClothList = [
-      {name:'Saree', price:40},
-      {name:'Pant', price:20},
-      {name:'Shirt', price:20},
-      {name:'Churidar', price:35},
-      {name:'Top', price:20},
-      {name:'Jeans', price:20},
-      {name:'Blouse', price:15},
-      {name:'Dothi', price:20},
-      {name:'Suit', price:50},
-      {name:'Others', price:0}
+      { name: 'Saree', price: 40 },
+      { name: 'Pant', price: 20 },
+      { name: 'Shirt', price: 20 },
+      { name: 'Churidar', price: 35 },
+      { name: 'Top', price: 20 },
+      { name: 'Jeans', price: 20 },
+      { name: 'Blouse', price: 15 },
+      { name: 'Dothi', price: 20 },
+      { name: 'Suit', price: 50 },
+      { name: 'Others', price: 0 }
     ];
     let currentClothList = laundryClothList;
 
@@ -856,6 +1071,7 @@
     });
   </script>
 </head>
+
 <body>
   <div id="homeDiv" class="container">
     <h1>Welcome</h1>
@@ -864,7 +1080,7 @@
     <button class="secondary" onclick="openOrderForm('Ironing')">Ironing</button>
     <input type="button" class="link" value="Search Orders" onclick="openSearch()">
     <input type="button" class="link" value="Admin Login (Monthly Report)" onclick="openAdminLogin()">
-    <button class="danger" onclick="deleteOldOrders()">Clean Old Orders (30+ Days)</button>
+    <button class="danger" onclick="deleteOldOrders()">Clean Old Orders (45+ Days)</button>
   </div>
 
   <div id="orderFormDiv" class="container" style="display:none;">
@@ -872,7 +1088,8 @@
     <h2 id="formTitle" style="margin-top:0;"></h2>
     <form id="orderForm" class="field">
       <div class="field"><label>Customer Name</label><input type="text" id="custName"></div>
-      <div class="field"><label>Mobile Number <span style="color:red">*</span></label><input type="text" id="custMobile" required></div>
+      <div class="field"><label>Mobile Number <span style="color:red">*</span></label><input type="text" id="custMobile"
+          required></div>
       <div class="field"><label>Date</label><input type="date" id="orderDate" required></div>
       <div class="field"><label>Item</label><select id="clothSelect"></select></div>
       <div id="customClothDiv" class="field" style="display:none;">
@@ -881,11 +1098,14 @@
       </div>
       <div id="rateDiv" class="field" style="display:none;">
         <label>Rate Type</label>
-        <input type="radio" id="rateDC" name="rateOption" value="dc" checked> <label for="rateDC" class="inline-label">DC Rate</label>
-        <input type="radio" id="ratePL" name="rateOption" value="pl"> <label for="ratePL" class="inline-label">PL Rate</label>
+        <input type="radio" id="rateDC" name="rateOption" value="dc" checked> <label for="rateDC"
+          class="inline-label">DC Rate</label>
+        <input type="radio" id="ratePL" name="rateOption" value="pl"> <label for="ratePL" class="inline-label">PL
+          Rate</label>
       </div>
       <div class="field"><label>Quantity</label><input type="number" id="quantity" min="1" value="1" required></div>
-      <div class="field"><strong>Unit Price (₹): </strong><span id="unitPrice">0</span> • <strong>Item Subtotal (₹): </strong><span id="itemSubtotal">0.00</span></div>
+      <div class="field"><strong>Unit Price (₹): </strong><span id="unitPrice">0</span> • <strong>Item Subtotal (₹):
+        </strong><span id="itemSubtotal">0.00</span></div>
 
       <button type="button" class="secondary" onclick="addItemToOrder()">+ Add Next Item</button>
 
@@ -930,8 +1150,10 @@
   <div id="adminReportDiv" class="container" style="display:none; max-width:560px;">
     <h2>Monthly Earnings Report</h2>
     <div id="monthlyReportTable" style="overflow-x:auto;"></div>
-    <button type="button" class="success" onclick="exportMonthlyReportCSV()" style="margin-top:14px;">Export to Excel (CSV)</button>
+    <button type="button" class="success" onclick="exportMonthlyReportCSV()" style="margin-top:14px;">Export to Excel
+      (CSV)</button>
     <button type="button" class="secondary" onclick="logoutAdmin()">Logout</button>
   </div>
 </body>
+
 </html>
