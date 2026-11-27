@@ -192,6 +192,63 @@
       font-weight: bold;
     }
 
+    .order-actions {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 6px;
+    }
+
+    .order-actions-left {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 4px;
+    }
+
+    .paid-box {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 10px;
+      border-radius: 4px;
+      border: 1.5px solid #2e7d32;
+      background: #e8f5e9;
+      color: #2e7d32;
+      font-size: 13px;
+      font-weight: bold;
+      cursor: pointer;
+      user-select: none;
+      margin: 4px 0 0 0;
+      width: auto;
+    }
+
+    .paid-box.is-paid {
+      background: #2e7d32;
+      color: #fff;
+    }
+
+    .paid-box input[type="checkbox"] {
+      width: auto;
+      margin: 0;
+      cursor: pointer;
+      accent-color: #1b5e20;
+    }
+
+    .paid-badge {
+      display: inline-block;
+      background: #2e7d32;
+      color: #fff;
+      font-size: 11px;
+      font-weight: bold;
+      padding: 2px 7px;
+      border-radius: 4px;
+      margin-left: 8px;
+      vertical-align: middle;
+    }
+
     .receipt-modal {
       position: fixed;
       inset: 0;
@@ -725,14 +782,23 @@
           ? o.unitPrice
           : ((o.unit_price !== undefined && o.unit_price !== null) ? o.unit_price : 0);
         const hasBreakdown = Boolean(parseBreakdownFromMaterial(o.material));
+        const isPaid = isOrderPaid(o);
 
         div.innerHTML = `
-          <div class="sl-inline">SL No: ${slNo}</div>
+          <div class="sl-inline">SL No: ${slNo}${isPaid ? '<span class="paid-badge">PAID</span>' : ''}</div>
           <strong>${o.name}</strong> – ${o.mobile}<br>
           ${o.service} on ${o.date}<br>
           ${o.material} • Count: <strong>${o.quantity}</strong> = <strong>₹${amountStr}</strong><br>
-          <button type="button" class="small-btn primary" onclick="showReceipt(${o.id}, ${slNo})">View Receipt</button>
-          <button type="button" class="small-btn secondary" onclick="toggleEditOrder(${o.id})">Edit Count / Order</button>
+          <div class="order-actions">
+            <div class="order-actions-left">
+              <button type="button" class="small-btn primary" onclick="showReceipt(${o.id}, ${slNo})">View Receipt</button>
+              <button type="button" class="small-btn secondary" onclick="toggleEditOrder(${o.id})">Edit Count / Order</button>
+            </div>
+            <label class="paid-box ${isPaid ? 'is-paid' : ''}" title="Tick to mark Paid, untick to mark Unpaid">
+              <input type="checkbox" ${isPaid ? 'checked' : ''} onchange="toggleOrderPaid(${o.id}, this.checked)">
+              <span>${isPaid ? 'Paid ✓' : 'Paid'}</span>
+            </label>
+          </div>
           <div id="editBox-${o.id}" class="edit-panel" style="display:none;">
             <label style="font-size:13px;">Customer Name</label>
             <input type="text" id="editName-${o.id}" value="${escapeHtml(o.name)}" style="margin-bottom:8px;">
@@ -741,6 +807,32 @@
             <label style="font-size:13px;">Items / Material</label>
             <input type="text" id="editMaterial-${o.id}" value="${escapeHtml(o.material)}" oninput="syncEditInputs(${o.id})" style="margin-bottom:4px;">
             <div class="hint">Tip: Change any count inside parentheses, e.g. Saree (1×₹40) → Saree (3×₹40), to recalculate the price automatically.</div>
+            <div class="cart-box" style="margin:8px 0; background:#fff;">
+              <div style="font-weight:bold; font-size:13px; margin-bottom:6px;">Add / Change Item</div>
+              <label style="font-size:13px;">Item</label>
+              <select id="editClothSelect-${o.id}" onchange="onEditClothChange(${o.id})" style="margin-bottom:6px;"></select>
+              <div id="editCustomClothDiv-${o.id}" style="display:none; margin-bottom:6px;">
+                <label style="font-size:13px;">Custom Item Name</label>
+                <input type="text" id="editCustomName-${o.id}" placeholder="e.g., Silk Scarf" style="margin-bottom:4px;">
+                <label style="font-size:13px;">Custom Unit Price (₹)</label>
+                <input type="number" step="0.01" id="editCustomPrice-${o.id}" placeholder="e.g., 150" oninput="updateEditAddSubtotal(${o.id})">
+              </div>
+              <div id="editRateDiv-${o.id}" style="display:none; margin-bottom:6px;">
+                <label style="font-size:13px;">Rate Type</label>
+                <input type="radio" id="editRateDC-${o.id}" name="editRateOption-${o.id}" value="dc" checked onchange="onEditClothChange(${o.id})">
+                <label for="editRateDC-${o.id}" class="inline-label">DC Rate</label>
+                <input type="radio" id="editRatePL-${o.id}" name="editRateOption-${o.id}" value="pl" onchange="onEditClothChange(${o.id})">
+                <label for="editRatePL-${o.id}" class="inline-label">PL Rate</label>
+              </div>
+              <label style="font-size:13px;">Quantity</label>
+              <input type="number" id="editAddQty-${o.id}" min="1" value="1" oninput="updateEditAddSubtotal(${o.id})" style="margin-bottom:6px;">
+              <div style="font-size:13px; margin-bottom:6px;">
+                <strong>Unit Price (₹): </strong><span id="editAddUnitPrice-${o.id}">0</span> •
+                <strong>Item Subtotal (₹): </strong><span id="editAddSubtotal-${o.id}">0.00</span>
+              </div>
+              <button type="button" class="small-btn secondary" onclick="applyEditOrderItem(${o.id}, 'add')">+ Add Item</button>
+              <button type="button" class="small-btn primary" onclick="applyEditOrderItem(${o.id}, 'replace')">Replace Items</button>
+            </div>
             <label style="font-size:13px;">Cloth Count (Quantity)</label>
             <input type="number" id="editQty-${o.id}" min="1" value="${o.quantity}" ${hasBreakdown ? 'readonly style="background:#eee; margin-bottom:8px;"' : 'style="margin-bottom:8px;"'} oninput="previewEditedAmount(${o.id})">
             <div id="editUnitPriceWrap-${o.id}" style="${hasBreakdown ? 'display:none;' : ''} margin-bottom:8px;">
@@ -756,7 +848,126 @@
         `;
 
         container.appendChild(div);
+        populateEditClothSelect(o.id, o.service);
+        onEditClothChange(o.id);
       });
+    }
+
+    function getClothListForService(service) {
+      return service === 'Ironing' ? ironingClothList : laundryClothList;
+    }
+
+    function populateEditClothSelect(id, service) {
+      const select = document.getElementById(`editClothSelect-${id}`);
+      if (!select) return;
+      select.innerHTML = '';
+      getClothListForService(service).forEach(item => {
+        const opt = document.createElement('option');
+        opt.value = item.name;
+        opt.textContent = item.name;
+        select.appendChild(opt);
+      });
+    }
+
+    function onEditClothChange(id) {
+      const select = document.getElementById(`editClothSelect-${id}`);
+      if (!select) return;
+      const targetOrder = orders.find(x => String(x.id) === String(id));
+      const list = getClothListForService(targetOrder ? targetOrder.service : 'Ironing');
+      const chosen = select.value;
+      const customDiv = document.getElementById(`editCustomClothDiv-${id}`);
+      const rateDiv = document.getElementById(`editRateDiv-${id}`);
+      const priceSpan = document.getElementById(`editAddUnitPrice-${id}`);
+
+      if (chosen === 'Others') {
+        customDiv.style.display = 'block';
+        rateDiv.style.display = 'none';
+        priceSpan.textContent = document.getElementById(`editCustomPrice-${id}`).value || '0';
+      } else {
+        customDiv.style.display = 'none';
+        const item = list.find(c => c.name === chosen);
+        if (item && ('dc' in item)) {
+          rateDiv.style.display = 'block';
+          const checkedRate = document.querySelector(`input[name="editRateOption-${id}"]:checked`);
+          const selectedRate = checkedRate ? checkedRate.value : 'dc';
+          const price = selectedRate === 'dc' ? item.dc : item.pl;
+          priceSpan.textContent = price !== undefined ? price : '0';
+        } else {
+          rateDiv.style.display = 'none';
+          priceSpan.textContent = item ? item.price : '0';
+        }
+      }
+      updateEditAddSubtotal(id);
+    }
+
+    function updateEditAddSubtotal(id) {
+      const select = document.getElementById(`editClothSelect-${id}`);
+      if (!select) return;
+      const qty = parseInt(document.getElementById(`editAddQty-${id}`).value, 10) || 0;
+      if (select.value === 'Others') {
+        document.getElementById(`editAddUnitPrice-${id}`).textContent = document.getElementById(`editCustomPrice-${id}`).value || '0';
+      }
+      const unitPrice = parseFloat(document.getElementById(`editAddUnitPrice-${id}`).textContent) || 0;
+      const subtotal = qty * unitPrice;
+      document.getElementById(`editAddSubtotal-${id}`).textContent = isNaN(subtotal) ? '0.00' : subtotal.toFixed(2);
+    }
+
+    function applyEditOrderItem(id, mode) {
+      const select = document.getElementById(`editClothSelect-${id}`);
+      if (!select) return;
+      const targetOrder = orders.find(x => String(x.id) === String(id));
+      const list = getClothListForService(targetOrder ? targetOrder.service : 'Ironing');
+      const cloth = select.value;
+      const customName = document.getElementById(`editCustomName-${id}`).value.trim();
+      const customPrice = parseFloat(document.getElementById(`editCustomPrice-${id}`).value) || 0;
+      const qty = parseInt(document.getElementById(`editAddQty-${id}`).value, 10) || 0;
+
+      let materialDesc = cloth;
+      let unitPrice = 0;
+
+      if (cloth === 'Others') {
+        materialDesc = customName || 'Other';
+        unitPrice = customPrice;
+      } else {
+        const item = list.find(c => c.name === cloth);
+        if (item && ('dc' in item)) {
+          const checkedRate = document.querySelector(`input[name="editRateOption-${id}"]:checked`);
+          const selectedRate = checkedRate ? checkedRate.value : 'dc';
+          unitPrice = selectedRate === 'dc' ? item.dc : item.pl;
+          materialDesc = `${cloth} (${selectedRate.toUpperCase()})`;
+        } else {
+          unitPrice = item ? item.price : 0;
+        }
+      }
+
+      if (!materialDesc || qty <= 0) {
+        alert('Please select a valid item and enter quantity > 0.');
+        return;
+      }
+      if (cloth === 'Others' && unitPrice <= 0) {
+        alert('Please enter a custom unit price > 0.');
+        return;
+      }
+
+      const newEntry = `${materialDesc} (${qty}×₹${unitPrice})`;
+      const matInput = document.getElementById(`editMaterial-${id}`);
+      const currentMat = matInput.value.trim();
+
+      if (mode === 'replace' || !currentMat) {
+        matInput.value = newEntry;
+      } else if (parseBreakdownFromMaterial(currentMat)) {
+        matInput.value = `${currentMat}, ${newEntry}`;
+      } else {
+        const existingQty = parseInt(document.getElementById(`editQty-${id}`).value, 10) || 1;
+        const existingUnitPrice = parseFloat(document.getElementById(`editUnitPrice-${id}`).value) || 0;
+        matInput.value = `${currentMat} (${existingQty}×₹${existingUnitPrice}), ${newEntry}`;
+      }
+
+      document.getElementById(`editCustomName-${id}`).value = '';
+      document.getElementById(`editCustomPrice-${id}`).value = '';
+      document.getElementById(`editAddQty-${id}`).value = 1;
+      onEditClothChange(id);
+      syncEditInputs(id);
     }
 
     function escapeHtml(str) {
@@ -772,6 +983,7 @@
       if (!box) return;
       box.style.display = box.style.display === 'none' ? 'block' : 'none';
       if (box.style.display === 'block') {
+        onEditClothChange(id);
         syncEditInputs(id);
       }
     }
@@ -858,16 +1070,75 @@
       alert(`Order updated! New count: ${calc.quantity}, New amount: ₹${calc.amount.toFixed(2)}`);
     }
 
+    const PAID_STORAGE_KEY = 'smart_ironing_paid_orders_v1';
+    let paidColumnWarned = false;
+
+    function getLocalPaidMap() {
+      try {
+        return JSON.parse(localStorage.getItem(PAID_STORAGE_KEY) || '{}');
+      } catch (e) {
+        return {};
+      }
+    }
+
+    function setLocalPaidStatus(id, isPaid) {
+      try {
+        const map = getLocalPaidMap();
+        if (isPaid) {
+          map[String(id)] = true;
+        } else {
+          delete map[String(id)];
+        }
+        localStorage.setItem(PAID_STORAGE_KEY, JSON.stringify(map));
+      } catch (e) {
+        console.warn('Could not persist paid status locally:', e);
+      }
+    }
+
+    function isOrderPaid(order) {
+      if (!order) return false;
+      if ('paid' in order && order.paid !== null && order.paid !== undefined) {
+        return Boolean(order.paid);
+      }
+      return Boolean(getLocalPaidMap()[String(order.id)]);
+    }
+
+    async function toggleOrderPaid(id, isPaid) {
+      const targetOrder = orders.find(x => String(x.id) === String(id));
+      const matchId = targetOrder ? targetOrder.id : id;
+
+      setLocalPaidStatus(matchId, isPaid);
+      if (targetOrder) {
+        targetOrder.paid = isPaid;
+      }
+
+      const { error } = await supabaseClient
+        .from('orders')
+        .update({ paid: isPaid })
+        .eq('id', matchId);
+
+      if (error) {
+        console.warn('Supabase paid update fallback to localStorage:', error.message);
+        if (!paidColumnWarned) {
+          paidColumnWarned = true;
+          alert('Paid status updated on this device. To sync Paid status across all devices, add a boolean column named "paid" (default false) to your Supabase "orders" table.');
+        }
+      }
+
+      performSearch();
+    }
+
     function showReceipt(id, explicitSl) {
       const idx = orders.findIndex(x => x.id === id);
       if (idx === -1) return;
       const o = orders[idx];
       const slNo = explicitSl !== undefined ? explicitSl : getOrderSlNo(o, idx);
+      const isPaid = isOrderPaid(o);
 
       const rawMobile = (o.mobile || '').toString().trim();
       const dialNumber = rawMobile.replace(/[^+\d]/g, '');
 
-      document.getElementById('receiptSlNo').textContent = `SL No: ${slNo}`;
+      document.getElementById('receiptSlNo').innerHTML = `SL No: ${slNo}${isPaid ? '<span class="paid-badge">PAID</span>' : ''}`;
       document.getElementById('receiptBody').innerHTML = `
         <div class="receipt-row"><strong>Service:</strong> ${escapeHtml(o.service)}</div>
         <div class="receipt-row"><strong>Name:</strong> ${escapeHtml(o.name)}</div>
@@ -876,6 +1147,7 @@
         <div class="receipt-row"><strong>Item(s):</strong> ${escapeHtml(o.material)}</div>
         <div class="receipt-row"><strong>Count / Quantity:</strong> ${o.quantity}</div>
         <div class="receipt-row" style="font-size:17px;"><strong>Amount:</strong> ₹${Number(o.amount).toFixed(2)}</div>
+        ${isPaid ? '<div class="receipt-row" style="color:#2e7d32; font-weight:bold;"><strong>Payment:</strong> PAID</div>' : ''}
       `;
 
       document.getElementById('receiptModal').style.display = 'flex';
