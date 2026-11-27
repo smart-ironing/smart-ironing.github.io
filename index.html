@@ -556,46 +556,6 @@
           <span><strong>${it.material}</strong> × ${it.quantity} @ ₹${it.unitPrice} = <strong>₹${it.amount.toFixed(2)}</strong></span>
           <button type="button" class="remove-btn" onclick="removeDraftItem(${index})">Remove</button>
         `;
-
-    // Add item to existing order from receipt
-    function addItemToExistingOrder(id) {
-      const orderIdx = orders.findIndex(o => o.id === id);
-      if (orderIdx === -1) return;
-      const order = orders[orderIdx];
-      const receiptModal = document.getElementById('receiptModal');
-      if (receiptModal) receiptModal.style.display = 'none';
-      // Open the order form first so it doesn't clear draftItems later
-      openOrderForm(order.service);
-      // Prepare draft items with the existing order details
-      draftItems = [];
-      draftItems.push({
-        material: order.material,
-        quantity: order.quantity,
-        unitPrice: order.unitPrice || order.unit_price || 0,
-        amount: order.amount
-      });
-      // Pre‑fill form fields
-      document.getElementById('custName').value = order.name || '';
-      document.getElementById('custMobile').value = order.mobile || '';
-      document.getElementById('orderDate').value = order.date || '';
-      const select = document.getElementById('clothSelect');
-      if (select) {
-        select.value = order.material;
-        onClothChange();
-      }
-      document.getElementById('quantity').value = order.quantity || 1;
-      const unitPriceSpan = document.getElementById('unitPrice');
-      if (unitPriceSpan) unitPriceSpan.textContent = order.unitPrice || order.unit_price || 0;
-      if (currentClothList.find(c => c.name === order.material && c.dc === (order.unitPrice || order.unit_price))) {
-        document.getElementById('rateDC').checked = true;
-      } else if (currentClothList.find(c => c.name === order.material && c.pl === (order.unitPrice || order.unit_price))) {
-        document.getElementById('ratePL').checked = true;
-      }
-      computeTotal();
-      renderDraftItems();
-      activeSlNo = order.sl_no || order.slNo || computeNextSlNo();
-    }
-
         listEl.appendChild(row);
       });
 
@@ -791,49 +751,9 @@
               <strong>Updated Amount (₹): </strong><span id="editPreviewAmount-${o.id}">${amountStr}</span>
             </div>
             <button type="button" class="small-btn success" onclick="saveEditedOrder(${o.id})">Save Changes</button>
-            <button type="button" class="small-btn secondary" onclick="addItemToExistingOrder(${o.id})">Add Item</button>
-        <button type="button" class="small-btn" onclick="toggleEditOrder(${o.id})">Cancel</button>
+            <button type="button" class="small-btn" onclick="toggleEditOrder(${o.id})">Cancel</button>
           </div>
         `;
-
-    // Add item to existing order from receipt
-    function addItemToExistingOrder(id) {
-      const orderIdx = orders.findIndex(o => o.id === id);
-      if (orderIdx === -1) return;
-      const order = orders[orderIdx];
-      const receiptModal = document.getElementById('receiptModal');
-      if (receiptModal) receiptModal.style.display = 'none';
-      // Open the order form first so it doesn't clear draftItems later
-      openOrderForm(order.service);
-      // Prepare draft items with the existing order details
-      draftItems = [];
-      draftItems.push({
-        material: order.material,
-        quantity: order.quantity,
-        unitPrice: order.unitPrice || order.unit_price || 0,
-        amount: order.amount
-      });
-      // Pre‑fill form fields
-      document.getElementById('custName').value = order.name || '';
-      document.getElementById('custMobile').value = order.mobile || '';
-      document.getElementById('orderDate').value = order.date || '';
-      const select = document.getElementById('clothSelect');
-      if (select) {
-        select.value = order.material;
-        onClothChange();
-      }
-      document.getElementById('quantity').value = order.quantity || 1;
-      const unitPriceSpan = document.getElementById('unitPrice');
-      if (unitPriceSpan) unitPriceSpan.textContent = order.unitPrice || order.unit_price || 0;
-      if (currentClothList.find(c => c.name === order.material && c.dc === (order.unitPrice || order.unit_price))) {
-        document.getElementById('rateDC').checked = true;
-      } else if (currentClothList.find(c => c.name === order.material && c.pl === (order.unitPrice || order.unit_price))) {
-        document.getElementById('ratePL').checked = true;
-      }
-      computeTotal();
-      renderDraftItems();
-      activeSlNo = order.sl_no || order.slNo || computeNextSlNo();
-    }
 
         container.appendChild(div);
       });
@@ -956,7 +876,6 @@
         <div class="receipt-row"><strong>Item(s):</strong> ${escapeHtml(o.material)}</div>
         <div class="receipt-row"><strong>Count / Quantity:</strong> ${o.quantity}</div>
         <div class="receipt-row" style="font-size:17px;"><strong>Amount:</strong> ₹${Number(o.amount).toFixed(2)}</div>
-        <button type="button" class="small-btn secondary" onclick="addItemToExistingOrder(${id})">Add Item</button>
       `;
 
       document.getElementById('receiptModal').style.display = 'flex';
@@ -1078,46 +997,6 @@
             <td>${r.total.toFixed(2)}</td>
           </tr>
         `;
-
-    // Add item to existing order from receipt
-    function addItemToExistingOrder(id) {
-      const orderIdx = orders.findIndex(o => o.id === id);
-      if (orderIdx === -1) return;
-      const order = orders[orderIdx];
-      const receiptModal = document.getElementById('receiptModal');
-      if (receiptModal) receiptModal.style.display = 'none';
-      // Open the order form first so it doesn't clear draftItems later
-      openOrderForm(order.service);
-      // Prepare draft items with the existing order details
-      draftItems = [];
-      draftItems.push({
-        material: order.material,
-        quantity: order.quantity,
-        unitPrice: order.unitPrice || order.unit_price || 0,
-        amount: order.amount
-      });
-      // Pre‑fill form fields
-      document.getElementById('custName').value = order.name || '';
-      document.getElementById('custMobile').value = order.mobile || '';
-      document.getElementById('orderDate').value = order.date || '';
-      const select = document.getElementById('clothSelect');
-      if (select) {
-        select.value = order.material;
-        onClothChange();
-      }
-      document.getElementById('quantity').value = order.quantity || 1;
-      const unitPriceSpan = document.getElementById('unitPrice');
-      if (unitPriceSpan) unitPriceSpan.textContent = order.unitPrice || order.unit_price || 0;
-      if (currentClothList.find(c => c.name === order.material && c.dc === (order.unitPrice || order.unit_price))) {
-        document.getElementById('rateDC').checked = true;
-      } else if (currentClothList.find(c => c.name === order.material && c.pl === (order.unitPrice || order.unit_price))) {
-        document.getElementById('ratePL').checked = true;
-      }
-      computeTotal();
-      renderDraftItems();
-      activeSlNo = order.sl_no || order.slNo || computeNextSlNo();
-    }
-
       });
 
       html += `
