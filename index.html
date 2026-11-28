@@ -338,9 +338,92 @@
     let draftItems = [];
     let activeSlNo = 100;
     let supportsSlColumn = true;
+    let cloudLastSlNo = 99;
+    const SL_STORAGE_KEY = 'smart_ironing_sl_map_v1';
+    const LAST_SL_STORAGE_KEY = 'smart_ironing_last_sl_no_v1';
     const supabaseUrl = "https://cfsaiqgvpopnlhagxvqa.supabase.co";
     const supabaseKey = "sb_publishable_3sWev9-qMw38MDdl1CeS4g_maISPvi4";
     const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
+
+    function getLocalTodayStr() {
+      const now = new Date();
+      const y = now.getFullYear();
+      const m = String(now.getMonth() + 1).padStart(2, '0');
+      const d = String(now.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
+
+    function getLocalSlMap() {
+      try {
+        return JSON.parse(localStorage.getItem(SL_STORAGE_KEY) || '{}');
+      } catch (e) {
+        return {};
+      }
+    }
+
+    function setLocalSlNo(id, slNo) {
+      if (id === undefined || id === null || isNaN(Number(slNo))) return;
+      try {
+        const map = getLocalSlMap();
+        map[String(id)] = Number(slNo);
+        localStorage.setItem(SL_STORAGE_KEY, JSON.stringify(map));
+      } catch (e) {
+        console.warn('Could not persist SL map locally:', e);
+      }
+    }
+
+    function getStoredLastSlNo() {
+      try {
+        const val = parseInt(localStorage.getItem(LAST_SL_STORAGE_KEY) || '99', 10);
+        return isNaN(val) ? 99 : Math.max(99, val);
+      } catch (e) {
+        return 99;
+      }
+    }
+
+    function updateStoredLastSlNo(slNo) {
+      const num = parseInt(slNo, 10);
+      if (isNaN(num)) return;
+      try {
+        const current = getStoredLastSlNo();
+        if (num > current) {
+          localStorage.setItem(LAST_SL_STORAGE_KEY, String(num));
+        }
+      } catch (e) {
+        console.warn('Could not persist last SL no locally:', e);
+      }
+    }
+
+    async function fetchCloudLastSlNo() {
+      try {
+        const { data, error } = await supabaseClient
+          .from('counters')
+          .select('value')
+          .eq('name', 'orders_sl_no')
+          .maybeSingle();
+        if (!error && data && !isNaN(Number(data.value))) {
+          cloudLastSlNo = Math.max(cloudLastSlNo, Number(data.value));
+          updateStoredLastSlNo(cloudLastSlNo);
+        }
+      } catch (e) {
+        // Optional counters table may not exist yet
+      }
+    }
+
+    async function saveCloudLastSlNo(slNo) {
+      const num = parseInt(slNo, 10);
+      if (isNaN(num)) return;
+      const nextVal = Math.max(cloudLastSlNo, getStoredLastSlNo(), num);
+      cloudLastSlNo = nextVal;
+      updateStoredLastSlNo(nextVal);
+      try {
+        await supabaseClient
+          .from('counters')
+          .upsert({ name: 'orders_sl_no', value: nextVal }, { onConflict: 'name' });
+      } catch (e) {
+        // Optional counters table may not exist yet
+      }
+    }
 
     function getOrderSlNo(order, indexFromNewest) {
       if (order && order.sl_no !== undefined && order.sl_no !== null && !isNaN(Number(order.sl_no))) {
@@ -349,15 +432,25 @@
       if (order && order.slNo !== undefined && order.slNo !== null && !isNaN(Number(order.slNo))) {
         return Number(order.slNo);
       }
+      if (order && order.id !== undefined && order.id !== null) {
+        const cached = getLocalSlMap()[String(order.id)];
+        if (cached !== undefined && cached !== null && !isNaN(Number(cached))) {
+          return Number(cached);
+        }
+      }
       const total = orders.length;
       if (typeof indexFromNewest === 'number' && indexFromNewest >= 0) {
-        return 100 + (total - 1 - indexFromNewest);
+        const fallbackSl = 100 + (total - 1 - indexFromNewest);
+        if (order && order.id !== undefined && order.id !== null) {
+          setLocalSlNo(order.id, fallbackSl);
+        }
+        return fallbackSl;
       }
       return 100;
     }
 
     function computeNextSlNo() {
-      let maxSl = 99;
+      let maxSl = Math.max(99, getStoredLastSlNo(), cloudLastSlNo);
       orders.forEach((o, idx) => {
         const sl = getOrderSlNo(o, idx);
         if (sl > maxSl) maxSl = sl;
@@ -368,6 +461,8 @@
     async function loadOrders() {
       const statusEl = document.getElementById('dbStatus');
       if (statusEl) statusEl.textContent = 'Syncing with cloud database...';
+
+      await fetchCloudLastSlNo();
 
       const { data, error } = await supabaseClient
         .from('orders')
@@ -382,12 +477,23 @@
         if (orders.length > 0) {
           supportsSlColumn = ('sl_no' in orders[0]) || ('slNo' in orders[0]);
         }
-        if (statusEl) statusEl.textContent = `Connected • ${orders.length} shared orders`;
+        let maxSl = Math.max(99, getStoredLastSlNo(), cloudLastSlNo);
+        for (let idx = orders.length - 1; idx >= 0; idx--) {
+          const sl = getOrderSlNo(orders[idx], idx);
+          if (sl > maxSl) maxSl = sl;
+        }
+        updateStoredLastSlNo(maxSl);
+        if (statusEl) {
+          statusEl.textContent = `Connected • ${orders.length} shared orders`;
+        }
         if (document.getElementById('searchDiv').style.display === 'block') {
           const currentQuery = document.getElementById('searchQuery').value.trim();
           if (currentQuery !== '') {
             performSearch();
           }
+        }
+        if (document.getElementById('allOrdersDiv').style.display === 'block') {
+          renderAllOrdersTable();
         }
       }
     }
@@ -400,6 +506,10 @@
       .subscribe();
 
     async function saveOrderToSupabase(order) {
+      setLocalSlNo(order.id, order.sl_no);
+      updateStoredLastSlNo(order.sl_no);
+      await saveCloudLastSlNo(order.sl_no);
+
       const payload = { ...order };
       if (!supportsSlColumn) {
         delete payload.sl_no;
@@ -435,9 +545,12 @@
       const cutoffStr = cutoffDate.toISOString().split('T')[0];
 
       const confirmDelete = confirm(
-        `This will permanently delete all orders dated before ${cutoffStr} (strictly older than 45 days).\n\nDo you want to continue?`
+        `This will permanently delete all orders dated before ${cutoffStr} (strictly older than 45 days).\n\nYour SL No count will continue from the highest number.\nDo you want to continue?`
       );
       if (!confirmDelete) return;
+
+      const currentMaxSl = computeNextSlNo() - 1;
+      await saveCloudLastSlNo(currentMaxSl);
 
       const { data, error } = await supabaseClient
         .from('orders')
@@ -450,7 +563,7 @@
         alert('Failed to delete old orders: ' + error.message);
       } else {
         const deletedCount = data ? data.length : 0;
-        alert(`Cleanup complete! Deleted ${deletedCount} order(s) older than 45 days.`);
+        alert(`Cleanup complete! Deleted ${deletedCount} order(s) older than 45 days. Next SL No will continue from ${currentMaxSl + 1}.`);
         await loadOrders();
       }
     }
@@ -1071,6 +1184,8 @@
     }
 
     const PAID_STORAGE_KEY = 'smart_ironing_paid_orders_v1';
+    const PAID_OVERRIDE_KEY = 'smart_ironing_paid_override_v1';
+    const PAID_DATE_STORAGE_KEY = 'smart_ironing_paid_dates_v1';
     let paidColumnWarned = false;
 
     function getLocalPaidMap() {
@@ -1081,7 +1196,15 @@
       }
     }
 
-    function setLocalPaidStatus(id, isPaid) {
+    function getLocalPaidOverrideMap() {
+      try {
+        return JSON.parse(localStorage.getItem(PAID_OVERRIDE_KEY) || '{}');
+      } catch (e) {
+        return {};
+      }
+    }
+
+    function setLocalPaidStatus(id, isPaid, isOverride = false) {
       try {
         const map = getLocalPaidMap();
         if (isPaid) {
@@ -1090,45 +1213,113 @@
           delete map[String(id)];
         }
         localStorage.setItem(PAID_STORAGE_KEY, JSON.stringify(map));
+
+        const ov = getLocalPaidOverrideMap();
+        if (isOverride) {
+          ov[String(id)] = Boolean(isPaid);
+        } else {
+          delete ov[String(id)];
+        }
+        localStorage.setItem(PAID_OVERRIDE_KEY, JSON.stringify(ov));
       } catch (e) {
         console.warn('Could not persist paid status locally:', e);
       }
     }
 
+    function getLocalPaidDateMap() {
+      try {
+        return JSON.parse(localStorage.getItem(PAID_DATE_STORAGE_KEY) || '{}');
+      } catch (e) {
+        return {};
+      }
+    }
+
+    function setLocalPaidDate(id, paidDate) {
+      try {
+        const map = getLocalPaidDateMap();
+        if (paidDate) {
+          map[String(id)] = paidDate;
+        } else {
+          delete map[String(id)];
+        }
+        localStorage.setItem(PAID_DATE_STORAGE_KEY, JSON.stringify(map));
+      } catch (e) {
+        console.warn('Could not persist paid date locally:', e);
+      }
+    }
+
     function isOrderPaid(order) {
       if (!order) return false;
+      const ov = getLocalPaidOverrideMap();
+      if (String(order.id) in ov) {
+        return Boolean(ov[String(order.id)]);
+      }
       if ('paid' in order && order.paid !== null && order.paid !== undefined) {
         return Boolean(order.paid);
       }
       return Boolean(getLocalPaidMap()[String(order.id)]);
     }
 
+    function getOrderPaidDate(order) {
+      if (!isOrderPaid(order)) return null;
+      const localDate = order && order.id !== undefined ? getLocalPaidDateMap()[String(order.id)] : null;
+      if (order && 'paid_at' in order && order.paid_at) {
+        return String(order.paid_at).slice(0, 10);
+      }
+      if (localDate) return String(localDate).slice(0, 10);
+      if (order && order.date && String(order.date).length >= 10) {
+        return String(order.date).slice(0, 10);
+      }
+      return getLocalTodayStr();
+    }
+
     async function toggleOrderPaid(id, isPaid) {
       const targetOrder = orders.find(x => String(x.id) === String(id));
       const matchId = targetOrder ? targetOrder.id : id;
+      const paidDate = isPaid ? getLocalTodayStr() : null;
 
-      setLocalPaidStatus(matchId, isPaid);
+      setLocalPaidStatus(matchId, isPaid, true);
+      setLocalPaidDate(matchId, paidDate);
       if (targetOrder) {
         targetOrder.paid = isPaid;
+        targetOrder.paid_at = paidDate;
       }
 
-      const { error } = await supabaseClient
+      if (document.getElementById('searchDiv').style.display === 'block') {
+        performSearch();
+      }
+      if (document.getElementById('allOrdersDiv').style.display === 'block') {
+        renderAllOrdersTable();
+      }
+
+      let { data, error } = await supabaseClient
         .from('orders')
-        .update({ paid: isPaid })
-        .eq('id', matchId);
+        .update({ paid: isPaid, paid_at: paidDate })
+        .eq('id', matchId)
+        .select();
 
       if (error) {
-        console.warn('Supabase paid update fallback to localStorage:', error.message);
-        if (!paidColumnWarned) {
-          paidColumnWarned = true;
-          alert('Paid status updated on this device. To sync Paid status across all devices, add a boolean column named "paid" (default false) to your Supabase "orders" table.');
-        }
+        const retry = await supabaseClient
+          .from('orders')
+          .update({ paid: isPaid })
+          .eq('id', matchId)
+          .select();
+        data = retry.data;
+        error = retry.error;
       }
 
-      performSearch();
+      if (!error && data && data.length > 0) {
+        setLocalPaidStatus(matchId, isPaid, false);
+      } else {
+        console.warn('Supabase paid update fallback to localStorage:', error ? error.message : '0 rows updated (check RLS UPDATE policy)');
+        if (!paidColumnWarned) {
+          paidColumnWarned = true;
+          alert('Paid status updated on this device. To sync Paid status across all devices, ensure "paid" (boolean), "paid_at" (text) columns and an UPDATE policy exist on your Supabase "orders" table.');
+        }
+      }
     }
 
-    function showReceipt(id, explicitSl) {
+    function showReceipt(id, explicitSl, fromPopState) {
       const idx = orders.findIndex(x => x.id === id);
       if (idx === -1) return;
       const o = orders[idx];
@@ -1151,18 +1342,47 @@
       `;
 
       document.getElementById('receiptModal').style.display = 'flex';
+      if (!fromPopState) {
+        pushViewHistory('receipt', { orderId: id, slNo });
+      }
     }
 
-    function closeReceipt() {
+    function closeReceipt(fromPopState) {
+      if (!fromPopState && history.state && history.state.view === 'receipt') {
+        history.back();
+        return;
+      }
       document.getElementById('receiptModal').style.display = 'none';
     }
 
-    function showHome() {
-      document.getElementById('orderFormDiv').style.display = 'none';
-      document.getElementById('searchDiv').style.display = 'none';
-      document.getElementById('adminLoginDiv').style.display = 'none';
-      document.getElementById('adminReportDiv').style.display = 'none';
-      document.getElementById('homeDiv').style.display = 'block';
+    function setVisibleView(viewName) {
+      document.getElementById('homeDiv').style.display = viewName === 'home' ? 'block' : 'none';
+      document.getElementById('orderFormDiv').style.display = viewName === 'orderForm' ? 'block' : 'none';
+      document.getElementById('searchDiv').style.display = (viewName === 'search' || viewName === 'receipt') ? 'block' : 'none';
+      document.getElementById('allOrdersDiv').style.display = viewName === 'allOrders' ? 'block' : 'none';
+      document.getElementById('adminLoginDiv').style.display = viewName === 'adminLogin' ? 'block' : 'none';
+      document.getElementById('adminReportDiv').style.display = viewName === 'adminReport' ? 'block' : 'none';
+      if (viewName !== 'receipt') {
+        document.getElementById('receiptModal').style.display = 'none';
+      }
+    }
+
+    function pushViewHistory(viewName, extra = {}, replace = false) {
+      const state = { view: viewName, ...extra };
+      const hash = `#${viewName}`;
+      if (replace) {
+        history.replaceState(state, '', hash);
+      } else if (!history.state || JSON.stringify(history.state) !== JSON.stringify(state)) {
+        history.pushState(state, '', hash);
+      }
+    }
+
+    function showHome(fromPopState) {
+      if (!fromPopState && history.state && history.state.view && history.state.view !== 'home') {
+        history.back();
+        return;
+      }
+      setVisibleView('home');
     }
 
     // ---------- Admin Login & Monthly Excel Report ----------
@@ -1171,15 +1391,15 @@
     let isAdminLoggedIn = false;
 
     function openAdminLogin() {
-      document.getElementById('homeDiv').style.display = 'none';
       if (isAdminLoggedIn) {
-        openAdminReport();
+        openAdminReport(false);
         return;
       }
       document.getElementById('adminUser').value = '';
       document.getElementById('adminPass').value = '';
       document.getElementById('adminLoginError').textContent = '';
-      document.getElementById('adminLoginDiv').style.display = 'block';
+      setVisibleView('adminLogin');
+      pushViewHistory('adminLogin');
     }
 
     async function handleAdminLogin() {
@@ -1190,8 +1410,7 @@
       if (user === ADMIN_USER && pass === ADMIN_PASS) {
         isAdminLoggedIn = true;
         errEl.textContent = '';
-        document.getElementById('adminLoginDiv').style.display = 'none';
-        await openAdminReport();
+        await openAdminReport(true);
       } else {
         errEl.textContent = 'Invalid username or password.';
       }
@@ -1207,7 +1426,7 @@
       orders.forEach(o => {
         const month = (o.date && String(o.date).length >= 7) ? String(o.date).slice(0, 7) : 'Unknown';
         if (!byMonth[month]) {
-          byMonth[month] = { month, count: 0, laundry: 0, ironing: 0, total: 0 };
+          byMonth[month] = { month, count: 0, laundry: 0, ironing: 0, total: 0, paidTotal: 0 };
         }
         const amt = Number(o.amount) || 0;
         byMonth[month].count += 1;
@@ -1217,12 +1436,51 @@
           byMonth[month].laundry += amt;
         }
         byMonth[month].total += amt;
+        if (isOrderPaid(o)) {
+          const paidDate = getOrderPaidDate(o);
+          const paidMonth = (paidDate && paidDate.length >= 7) ? paidDate.slice(0, 7) : month;
+          if (!byMonth[paidMonth]) {
+            byMonth[paidMonth] = { month: paidMonth, count: 0, laundry: 0, ironing: 0, total: 0, paidTotal: 0 };
+          }
+          byMonth[paidMonth].paidTotal += amt;
+        }
       });
       return Object.values(byMonth).sort((a, b) => b.month.localeCompare(a.month));
     }
 
-    async function openAdminReport() {
-      document.getElementById('adminReportDiv').style.display = 'block';
+    function getDailyIncomeData(selectedMonth) {
+      const byDate = {};
+      orders.forEach((o, idx) => {
+        const orderDate = (o.date && String(o.date).length >= 10) ? String(o.date).slice(0, 10) : 'Unknown';
+        const amt = Number(o.amount) || 0;
+        const slNo = getOrderSlNo(o, idx);
+        if (!byDate[orderDate]) {
+          byDate[orderDate] = { date: orderDate, orderCount: 0, orderIncome: 0, paidCount: 0, paidIncome: 0, paidSlNos: [] };
+        }
+        byDate[orderDate].orderCount += 1;
+        byDate[orderDate].orderIncome += amt;
+
+        if (isOrderPaid(o)) {
+          const paidDate = getOrderPaidDate(o) || orderDate;
+          if (!byDate[paidDate]) {
+            byDate[paidDate] = { date: paidDate, orderCount: 0, orderIncome: 0, paidCount: 0, paidIncome: 0, paidSlNos: [] };
+          }
+          byDate[paidDate].paidCount += 1;
+          byDate[paidDate].paidIncome += amt;
+          byDate[paidDate].paidSlNos.push(slNo);
+        }
+      });
+
+      let rows = Object.values(byDate);
+      if (selectedMonth && selectedMonth !== 'ALL') {
+        rows = rows.filter(r => r.date.startsWith(selectedMonth));
+      }
+      return rows.sort((a, b) => b.date.localeCompare(a.date));
+    }
+
+    async function openAdminReport(replaceHistory = false) {
+      setVisibleView('adminReport');
+      pushViewHistory('adminReport', {}, replaceHistory);
       await loadOrders();
       renderMonthlyReport();
     }
@@ -1233,6 +1491,8 @@
 
       if (rows.length === 0) {
         container.innerHTML = '<p style="text-align:center; color:#666;">No orders found.</p>';
+        populateDailyMonthFilter([]);
+        renderDailyReport();
         return;
       }
 
@@ -1240,6 +1500,7 @@
       let grandLaundry = 0;
       let grandIroning = 0;
       let grandTotal = 0;
+      let grandPaid = 0;
 
       let html = `
         <table class="report-table">
@@ -1250,6 +1511,7 @@
               <th>Laundry (₹)</th>
               <th>Ironing (₹)</th>
               <th>Total (₹)</th>
+              <th>Paid (₹)</th>
             </tr>
           </thead>
           <tbody>
@@ -1260,6 +1522,7 @@
         grandLaundry += r.laundry;
         grandIroning += r.ironing;
         grandTotal += r.total;
+        grandPaid += r.paidTotal;
         html += `
           <tr>
             <td>${escapeHtml(r.month)}</td>
@@ -1267,6 +1530,7 @@
             <td>${r.laundry.toFixed(2)}</td>
             <td>${r.ironing.toFixed(2)}</td>
             <td>${r.total.toFixed(2)}</td>
+            <td style="color:#2e7d32; font-weight:bold;">${r.paidTotal.toFixed(2)}</td>
           </tr>
         `;
       });
@@ -1278,6 +1542,94 @@
             <td>${grandLaundry.toFixed(2)}</td>
             <td>${grandIroning.toFixed(2)}</td>
             <td>${grandTotal.toFixed(2)}</td>
+            <td style="color:#2e7d32;">${grandPaid.toFixed(2)}</td>
+          </tr>
+        </tbody>
+      </table>
+      `;
+      container.innerHTML = html;
+
+      populateDailyMonthFilter(rows.map(r => r.month).filter(m => m !== 'Unknown'));
+      renderDailyReport();
+    }
+
+    function populateDailyMonthFilter(months) {
+      const select = document.getElementById('dailyReportMonthFilter');
+      if (!select) return;
+      const previousVal = select.value;
+      select.innerHTML = '<option value="ALL">All Months</option>';
+      months.forEach(m => {
+        const opt = document.createElement('option');
+        opt.value = m;
+        opt.textContent = m;
+        select.appendChild(opt);
+      });
+      if (previousVal && (previousVal === 'ALL' || months.includes(previousVal))) {
+        select.value = previousVal;
+      } else if (months.length > 0) {
+        select.value = months[0];
+      } else {
+        select.value = 'ALL';
+      }
+    }
+
+    function renderDailyReport() {
+      const container = document.getElementById('dailyReportTable');
+      if (!container) return;
+      const select = document.getElementById('dailyReportMonthFilter');
+      const selectedMonth = select ? select.value : 'ALL';
+      const rows = getDailyIncomeData(selectedMonth);
+
+      if (rows.length === 0) {
+        container.innerHTML = '<p style="text-align:center; color:#666;">No daily records found for this selection.</p>';
+        return;
+      }
+
+      let totalOrders = 0;
+      let totalOrderIncome = 0;
+      let totalPaidCount = 0;
+      let totalPaidIncome = 0;
+
+      let html = `
+        <table class="report-table">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Orders</th>
+              <th>Order Income (₹)</th>
+              <th>Paid Received (₹)</th>
+              <th>Paid SL No</th>
+            </tr>
+          </thead>
+          <tbody>
+      `;
+
+      rows.forEach(r => {
+        totalOrders += r.orderCount;
+        totalOrderIncome += r.orderIncome;
+        totalPaidCount += r.paidCount;
+        totalPaidIncome += r.paidIncome;
+        const slList = r.paidSlNos.length > 0
+          ? r.paidSlNos.slice().sort((a, b) => a - b).join(', ')
+          : '-';
+        html += `
+          <tr>
+            <td>${escapeHtml(r.date)}</td>
+            <td>${r.orderCount}</td>
+            <td>${r.orderIncome.toFixed(2)}</td>
+            <td style="color:#2e7d32; font-weight:bold;">${r.paidIncome.toFixed(2)} (${r.paidCount})</td>
+            <td style="text-align:left; font-size:12px;">${escapeHtml(slList)}</td>
+          </tr>
+        `;
+      });
+
+      html += `
+          <tr class="total-row">
+            <td>Total</td>
+            <td>${totalOrders}</td>
+            <td>${totalOrderIncome.toFixed(2)}</td>
+            <td style="color:#2e7d32;">${totalPaidIncome.toFixed(2)} (${totalPaidCount})</td>
+            <td>-</td>
           </tr>
         </tbody>
       </table>
@@ -1291,16 +1643,17 @@
         alert('No data to export.');
         return;
       }
-      const lines = ['Month,Orders,Laundry (INR),Ironing (INR),Total Earned (INR)'];
-      let grandCount = 0, grandLaundry = 0, grandIroning = 0, grandTotal = 0;
+      const lines = ['Month,Orders,Laundry (INR),Ironing (INR),Total Earned (INR),Paid Received (INR)'];
+      let grandCount = 0, grandLaundry = 0, grandIroning = 0, grandTotal = 0, grandPaid = 0;
       rows.forEach(r => {
         grandCount += r.count;
         grandLaundry += r.laundry;
         grandIroning += r.ironing;
         grandTotal += r.total;
-        lines.push(`${r.month},${r.count},${r.laundry.toFixed(2)},${r.ironing.toFixed(2)},${r.total.toFixed(2)}`);
+        grandPaid += r.paidTotal;
+        lines.push(`${r.month},${r.count},${r.laundry.toFixed(2)},${r.ironing.toFixed(2)},${r.total.toFixed(2)},${r.paidTotal.toFixed(2)}`);
       });
-      lines.push(`Grand Total,${grandCount},${grandLaundry.toFixed(2)},${grandIroning.toFixed(2)},${grandTotal.toFixed(2)}`);
+      lines.push(`Grand Total,${grandCount},${grandLaundry.toFixed(2)},${grandIroning.toFixed(2)},${grandTotal.toFixed(2)},${grandPaid.toFixed(2)}`);
 
       const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
@@ -1313,14 +1666,46 @@
       URL.revokeObjectURL(url);
     }
 
+    function exportDailyReportCSV() {
+      const select = document.getElementById('dailyReportMonthFilter');
+      const selectedMonth = select ? select.value : 'ALL';
+      const rows = getDailyIncomeData(selectedMonth);
+      if (rows.length === 0) {
+        alert('No daily data to export.');
+        return;
+      }
+      const lines = ['Date,Orders,Order Income (INR),Paid Orders,Paid Received (INR),Paid SL No'];
+      let totalOrders = 0, totalOrderIncome = 0, totalPaidCount = 0, totalPaidIncome = 0;
+      rows.forEach(r => {
+        totalOrders += r.orderCount;
+        totalOrderIncome += r.orderIncome;
+        totalPaidCount += r.paidCount;
+        totalPaidIncome += r.paidIncome;
+        const slList = r.paidSlNos.length > 0
+          ? r.paidSlNos.slice().sort((a, b) => a - b).join(', ')
+          : '-';
+        lines.push(`${r.date},${r.orderCount},${r.orderIncome.toFixed(2)},${r.paidCount},${r.paidIncome.toFixed(2)},"${slList}"`);
+      });
+      lines.push(`Total,${totalOrders},${totalOrderIncome.toFixed(2)},${totalPaidCount},${totalPaidIncome.toFixed(2)},-`);
+
+      const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `daily-income-report-${selectedMonth}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
     async function openOrderForm(service) {
       draftItems = [];
       await loadOrders();
       activeSlNo = computeNextSlNo();
 
-      document.getElementById('homeDiv').style.display = 'none';
-      const formDiv = document.getElementById('orderFormDiv');
-      formDiv.style.display = 'block';
+      setVisibleView('orderForm');
+      pushViewHistory('orderForm', { service });
       const form = document.getElementById('orderForm');
       form.dataset.service = service;
       document.getElementById('formSlNo').textContent = `SL No: ${activeSlNo}`;
@@ -1341,14 +1726,102 @@
     }
 
     async function openSearch() {
-      document.getElementById('homeDiv').style.display = 'none';
-      document.getElementById('searchDiv').style.display = 'block';
+      setVisibleView('search');
+      pushViewHistory('search');
       document.getElementById('searchQuery').value = '';
       document.getElementById('searchResults').innerHTML = '';
       await loadOrders();
     }
 
+    async function openAllOrders() {
+      setVisibleView('allOrders');
+      pushViewHistory('allOrders');
+      await loadOrders();
+      renderAllOrdersTable();
+    }
+
+    function renderAllOrdersTable() {
+      const container = document.getElementById('allOrdersTableWrap');
+      if (!container) return;
+      const filterEl = document.getElementById('allOrdersPaidFilter');
+      const filter = filterEl ? filterEl.value : 'ALL';
+
+      const rows = orders
+        .map((o, idx) => ({ order: o, slNo: getOrderSlNo(o, idx), isPaid: isOrderPaid(o) }))
+        .filter(({ isPaid }) => {
+          if (filter === 'PAID') return isPaid;
+          if (filter === 'UNPAID') return !isPaid;
+          return true;
+        });
+
+      if (rows.length === 0) {
+        container.innerHTML = '<p style="text-align:center; color:#666;">No orders found.</p>';
+        return;
+      }
+
+      let html = `
+        <table class="report-table">
+          <thead>
+            <tr>
+              <th>SL No</th>
+              <th>Name</th>
+              <th>Mobile</th>
+              <th>Amount (₹)</th>
+              <th>Paid</th>
+            </tr>
+          </thead>
+          <tbody>
+      `;
+
+      rows.forEach(({ order: o, slNo, isPaid }) => {
+        const amtStr = (o.amount !== undefined && o.amount !== null) ? Number(o.amount).toFixed(2) : '0.00';
+        html += `
+          <tr>
+            <td style="color:#d32f2f; font-weight:bold;">${slNo}</td>
+            <td style="text-align:left;">${escapeHtml(o.name)}</td>
+            <td style="text-align:left;">${escapeHtml(o.mobile)}</td>
+            <td>${amtStr}</td>
+            <td style="text-align:center;">
+              <span style="display:inline-block; padding:3px 8px; border-radius:4px; font-size:12px; font-weight:bold; ${isPaid ? 'background:#2e7d32; color:#fff;' : 'background:#ffebee; color:#c62828;'}">
+                ${isPaid ? 'Paid' : 'Unpaid'}
+              </span>
+            </td>
+          </tr>
+        `;
+      });
+
+      html += `
+          </tbody>
+        </table>
+      `;
+      container.innerHTML = html;
+    }
+
+    window.addEventListener('popstate', (event) => {
+      const state = event.state || { view: 'home' };
+      if (state.view === 'orderForm') {
+        setVisibleView('orderForm');
+      } else if (state.view === 'search') {
+        setVisibleView('search');
+      } else if (state.view === 'allOrders') {
+        setVisibleView('allOrders');
+        renderAllOrdersTable();
+      } else if (state.view === 'receipt') {
+        setVisibleView('search');
+        if (state.orderId !== undefined) {
+          showReceipt(state.orderId, state.slNo, true);
+        }
+      } else if (state.view === 'adminLogin') {
+        setVisibleView(isAdminLoggedIn ? 'adminReport' : 'adminLogin');
+      } else if (state.view === 'adminReport') {
+        setVisibleView(isAdminLoggedIn ? 'adminReport' : 'adminLogin');
+      } else {
+        setVisibleView('home');
+      }
+    });
+
     window.addEventListener('load', () => {
+      pushViewHistory('home', {}, true);
       loadOrders();
       populateClothSelect();
       document.getElementById('clothSelect').addEventListener('change', onClothChange);
@@ -1368,6 +1841,7 @@
     <button class="primary" onclick="openOrderForm('Laundry')">Laundry</button>
     <button class="secondary" onclick="openOrderForm('Ironing')">Ironing</button>
     <input type="button" class="link" value="Search Orders" onclick="openSearch()">
+    <input type="button" class="link" value="All Orders (SL No List)" onclick="openAllOrders()">
     <input type="button" class="link" value="Admin Login (Monthly Report)" onclick="openAdminLogin()">
     <button class="danger" onclick="deleteOldOrders()">Clean Old Orders (45+ Days)</button>
   </div>
@@ -1418,6 +1892,20 @@
     <input type="button" class="link" value="Back" onclick="showHome()">
   </div>
 
+  <div id="allOrdersDiv" class="container" style="display:none; max-width:600px;">
+    <h2>All Orders (SL No List)</h2>
+    <div class="field">
+      <label for="allOrdersPaidFilter">Filter</label>
+      <select id="allOrdersPaidFilter" onchange="renderAllOrdersTable()">
+        <option value="ALL">All Orders</option>
+        <option value="UNPAID">Unpaid Only</option>
+        <option value="PAID">Paid Only</option>
+      </select>
+    </div>
+    <div id="allOrdersTableWrap" style="overflow-x:auto;"></div>
+    <input type="button" class="link" value="Back" onclick="showHome()" style="margin-top:12px;">
+  </div>
+
   <div id="receiptModal" class="receipt-modal" onclick="if(event.target === this) closeReceipt()">
     <div class="receipt-card">
       <div id="receiptSlNo" class="receipt-sl">SL No: 100</div>
@@ -1439,7 +1927,17 @@
   <div id="adminReportDiv" class="container" style="display:none; max-width:560px;">
     <h2>Monthly Earnings Report</h2>
     <div id="monthlyReportTable" style="overflow-x:auto;"></div>
-    <button type="button" class="success" onclick="exportMonthlyReportCSV()" style="margin-top:14px;">Export to Excel
+    <button type="button" class="success" onclick="exportMonthlyReportCSV()" style="margin-top:14px;">Export Monthly
+      (CSV)</button>
+
+    <h3 style="margin-top:22px; margin-bottom:8px; color:#3f51b5;">Daily Income Report</h3>
+    <div class="hint" style="margin-bottom:8px;">Shows daily income from orders and actual money received on the day Paid is clicked.</div>
+    <div class="field">
+      <label for="dailyReportMonthFilter">Filter by Month</label>
+      <select id="dailyReportMonthFilter" onchange="renderDailyReport()"></select>
+    </div>
+    <div id="dailyReportTable" style="overflow-x:auto;"></div>
+    <button type="button" class="primary" onclick="exportDailyReportCSV()" style="margin-top:14px;">Export Daily Income
       (CSV)</button>
     <button type="button" class="secondary" onclick="logoutAdmin()">Logout</button>
   </div>
