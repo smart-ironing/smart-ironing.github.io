@@ -237,6 +237,61 @@
       accent-color: #1b5e20;
     }
 
+    /* Autocomplete suggestion dropdown */
+    .ac-wrap {
+      position: relative;
+    }
+
+    .ac-dropdown {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      background: #fff;
+      border: 1.5px solid #3f51b5;
+      border-radius: 0 0 6px 6px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      z-index: 9999;
+      max-height: 220px;
+      overflow-y: auto;
+      display: none;
+    }
+
+    .ac-dropdown.open {
+      display: block;
+    }
+
+    .ac-item {
+      padding: 10px 12px;
+      cursor: pointer;
+      border-bottom: 1px solid #f0f0f0;
+      font-size: 14px;
+      line-height: 1.4;
+    }
+
+    .ac-item:last-child {
+      border-bottom: none;
+    }
+
+    .ac-item:hover, .ac-item.ac-active {
+      background: #e8eaf6;
+    }
+
+    .ac-item .ac-name {
+      font-weight: bold;
+      color: #3f51b5;
+    }
+
+    .ac-item .ac-mobile {
+      color: #555;
+      font-size: 12px;
+    }
+
+    .ac-highlight {
+      background: #fff9c4;
+      border-radius: 2px;
+    }
+
     .paid-badge {
       display: inline-block;
       background: #2e7d32;
@@ -778,6 +833,123 @@
         amount: totalAmount
       };
     }
+
+    // -------- Customer Autocomplete --------
+    let acBound = false; // bind listeners only once
+
+    function getUniqueCustomers() {
+      const seen = new Map();
+      for (let i = orders.length - 1; i >= 0; i--) {
+        const o = orders[i];
+        const name = (o.name || '').trim();
+        const mobile = (o.mobile || '').toString().trim();
+        if (!name && !mobile) continue;
+        const key = name.toLowerCase() + '|' + mobile;
+        if (!seen.has(key)) seen.set(key, { name, mobile });
+      }
+      return Array.from(seen.values());
+    }
+
+    function acHighlight(text, query) {
+      if (!query) return escapeHtml(text);
+      const idx = text.toLowerCase().indexOf(query.toLowerCase());
+      if (idx === -1) return escapeHtml(text);
+      return escapeHtml(text.slice(0, idx))
+        + '<span class="ac-highlight">' + escapeHtml(text.slice(idx, idx + query.length)) + '</span>'
+        + escapeHtml(text.slice(idx + query.length));
+    }
+
+    function acRenderDrop(drop, customers, query) {
+      drop.innerHTML = '';
+      if (!customers.length) { drop.classList.remove('open'); return; }
+      customers.forEach((cust, idx) => {
+        const item = document.createElement('div');
+        item.className = 'ac-item';
+        item.setAttribute('data-idx', String(idx));
+        item.innerHTML = `<div class="ac-name">${acHighlight(cust.name, query)}</div>`
+                       + `<div class="ac-mobile">${acHighlight(cust.mobile, query)}</div>`;
+        item.addEventListener('mousedown', e => {
+          e.preventDefault();
+          acFill(cust);
+        });
+        drop.appendChild(item);
+      });
+      drop.classList.add('open');
+    }
+
+    function acFill(cust) {
+      document.getElementById('custName').value   = cust.name;
+      document.getElementById('custMobile').value = cust.mobile;
+      document.getElementById('custNameDropdown').classList.remove('open');
+      document.getElementById('custMobileDropdown').classList.remove('open');
+      document.getElementById('custMobile').focus();
+    }
+
+    function acFilter(q, field) {
+      if (!q) return [];
+      const lq = q.toLowerCase();
+      return getUniqueCustomers().filter(c =>
+        c.name.toLowerCase().includes(lq) || c.mobile.includes(lq)
+      ).slice(0, 10);
+    }
+
+    function acKeyNav(e, drop, customers) {
+      const items = drop.querySelectorAll('.ac-item');
+      if (!items.length) return;
+      let active = drop.querySelector('.ac-active');
+      let idx = active ? parseInt(active.getAttribute('data-idx'), 10) : -1;
+      if (e.key === 'ArrowDown')      { e.preventDefault(); idx = Math.min(idx + 1, items.length - 1); }
+      else if (e.key === 'ArrowUp')   { e.preventDefault(); idx = Math.max(idx - 1, 0); }
+      else if (e.key === 'Enter' && idx >= 0) { e.preventDefault(); acFill(customers[idx]); return; }
+      else if (e.key === 'Escape')    { drop.classList.remove('open'); return; }
+      else return;
+      items.forEach(it => it.classList.remove('ac-active'));
+      if (idx >= 0) items[idx].classList.add('ac-active');
+    }
+
+    function setupCustomerAutocomplete() {
+      if (acBound) return; // already bound — just let getUniqueCustomers() read fresh orders
+      acBound = true;
+
+      const nameInput   = document.getElementById('custName');
+      const mobileInput = document.getElementById('custMobile');
+      const nameDrop    = document.getElementById('custNameDropdown');
+      const mobileDrop  = document.getElementById('custMobileDropdown');
+      if (!nameInput || !mobileInput || !nameDrop || !mobileDrop) return;
+
+      // --- Name field ---
+      nameInput.addEventListener('input', () => {
+        const q = nameInput.value.trim();
+        acRenderDrop(nameDrop, acFilter(q), q);
+      });
+      nameInput.addEventListener('focus', () => {
+        const q = nameInput.value.trim();
+        if (q) acRenderDrop(nameDrop, acFilter(q), q);
+      });
+      nameInput.addEventListener('blur', () => {
+        setTimeout(() => nameDrop.classList.remove('open'), 200);
+      });
+      nameInput.addEventListener('keydown', e => {
+        acKeyNav(e, nameDrop, acFilter(nameInput.value.trim()));
+      });
+
+      // --- Mobile field ---
+      mobileInput.addEventListener('input', () => {
+        const q = mobileInput.value.trim();
+        acRenderDrop(mobileDrop, acFilter(q), q);
+      });
+      mobileInput.addEventListener('focus', () => {
+        const q = mobileInput.value.trim();
+        if (q) acRenderDrop(mobileDrop, acFilter(q), q);
+      });
+      mobileInput.addEventListener('blur', () => {
+        setTimeout(() => mobileDrop.classList.remove('open'), 200);
+      });
+      mobileInput.addEventListener('keydown', e => {
+        acKeyNav(e, mobileDrop, acFilter(mobileInput.value.trim()));
+      });
+    }
+    // -------- End Customer Autocomplete --------
 
     async function saveOrder() {
       const service = document.getElementById('orderForm').dataset.service;
@@ -1830,6 +2002,8 @@
       document.querySelectorAll('input[name="rateOption"]').forEach(r => {
         r.addEventListener('change', handleRateChange);
       });
+      // Bind autocomplete once after DOM is ready
+      setupCustomerAutocomplete();
     });
   </script>
 </head>
@@ -1850,9 +2024,20 @@
     <div id="formSlNo" class="sl-badge">SL No: 100</div>
     <h2 id="formTitle" style="margin-top:0;"></h2>
     <form id="orderForm" class="field">
-      <div class="field"><label>Customer Name</label><input type="text" id="custName"></div>
-      <div class="field"><label>Mobile Number <span style="color:red">*</span></label><input type="text" id="custMobile"
-          required></div>
+      <div class="field">
+        <label>Customer Name</label>
+        <div class="ac-wrap">
+          <input type="text" id="custName" autocomplete="off" placeholder="Type name to search…">
+          <div class="ac-dropdown" id="custNameDropdown"></div>
+        </div>
+      </div>
+      <div class="field">
+        <label>Mobile Number <span style="color:red">*</span></label>
+        <div class="ac-wrap">
+          <input type="text" id="custMobile" autocomplete="off" placeholder="Type mobile to search…" required>
+          <div class="ac-dropdown" id="custMobileDropdown"></div>
+        </div>
+      </div>
       <div class="field"><label>Date</label><input type="date" id="orderDate" required></div>
       <div class="field"><label>Item</label><select id="clothSelect"></select></div>
       <div id="customClothDiv" class="field" style="display:none;">
@@ -1931,7 +2116,8 @@
       (CSV)</button>
 
     <h3 style="margin-top:22px; margin-bottom:8px; color:#3f51b5;">Daily Income Report</h3>
-    <div class="hint" style="margin-bottom:8px;">Shows daily income from orders and actual money received on the day Paid is clicked.</div>
+    <div class="hint" style="margin-bottom:8px;">Shows daily income from orders and actual money received on the day
+      Paid is clicked.</div>
     <div class="field">
       <label for="dailyReportMonthFilter">Filter by Month</label>
       <select id="dailyReportMonthFilter" onchange="renderDailyReport()"></select>
