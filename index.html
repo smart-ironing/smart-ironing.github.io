@@ -250,7 +250,7 @@
       background: #fff;
       border: 1.5px solid #3f51b5;
       border-radius: 0 0 6px 6px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
       z-index: 9999;
       max-height: 220px;
       overflow-y: auto;
@@ -273,7 +273,8 @@
       border-bottom: none;
     }
 
-    .ac-item:hover, .ac-item.ac-active {
+    .ac-item:hover,
+    .ac-item.ac-active {
       background: #e8eaf6;
     }
 
@@ -867,7 +868,7 @@
         item.className = 'ac-item';
         item.setAttribute('data-idx', String(idx));
         item.innerHTML = `<div class="ac-name">${acHighlight(cust.name, query)}</div>`
-                       + `<div class="ac-mobile">${acHighlight(cust.mobile, query)}</div>`;
+          + `<div class="ac-mobile">${acHighlight(cust.mobile, query)}</div>`;
         item.addEventListener('mousedown', e => {
           e.preventDefault();
           acFill(cust);
@@ -878,7 +879,7 @@
     }
 
     function acFill(cust) {
-      document.getElementById('custName').value   = cust.name;
+      document.getElementById('custName').value = cust.name;
       document.getElementById('custMobile').value = cust.mobile;
       document.getElementById('custNameDropdown').classList.remove('open');
       document.getElementById('custMobileDropdown').classList.remove('open');
@@ -898,10 +899,10 @@
       if (!items.length) return;
       let active = drop.querySelector('.ac-active');
       let idx = active ? parseInt(active.getAttribute('data-idx'), 10) : -1;
-      if (e.key === 'ArrowDown')      { e.preventDefault(); idx = Math.min(idx + 1, items.length - 1); }
-      else if (e.key === 'ArrowUp')   { e.preventDefault(); idx = Math.max(idx - 1, 0); }
+      if (e.key === 'ArrowDown') { e.preventDefault(); idx = Math.min(idx + 1, items.length - 1); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); idx = Math.max(idx - 1, 0); }
       else if (e.key === 'Enter' && idx >= 0) { e.preventDefault(); acFill(customers[idx]); return; }
-      else if (e.key === 'Escape')    { drop.classList.remove('open'); return; }
+      else if (e.key === 'Escape') { drop.classList.remove('open'); return; }
       else return;
       items.forEach(it => it.classList.remove('ac-active'));
       if (idx >= 0) items[idx].classList.add('ac-active');
@@ -911,10 +912,10 @@
       if (acBound) return; // already bound — just let getUniqueCustomers() read fresh orders
       acBound = true;
 
-      const nameInput   = document.getElementById('custName');
+      const nameInput = document.getElementById('custName');
       const mobileInput = document.getElementById('custMobile');
-      const nameDrop    = document.getElementById('custNameDropdown');
-      const mobileDrop  = document.getElementById('custMobileDropdown');
+      const nameDrop = document.getElementById('custNameDropdown');
+      const mobileDrop = document.getElementById('custMobileDropdown');
       if (!nameInput || !mobileInput || !nameDrop || !mobileDrop) return;
 
       // --- Name field ---
@@ -1914,59 +1915,91 @@
 
     function renderAllOrdersTable() {
       const container = document.getElementById('allOrdersTableWrap');
+      const summaryEl = document.getElementById('allOrdersSummary');
       if (!container) return;
       const filterEl = document.getElementById('allOrdersPaidFilter');
       const filter = filterEl ? filterEl.value : 'ALL';
 
-      const rows = orders
-        .map((o, idx) => ({ order: o, slNo: getOrderSlNo(o, idx), isPaid: isOrderPaid(o) }))
-        .filter(({ isPaid }) => {
-          if (filter === 'PAID') return isPaid;
-          if (filter === 'UNPAID') return !isPaid;
-          return true;
-        });
+      const allRows = orders
+        .map((o, idx) => ({ order: o, slNo: getOrderSlNo(o, idx), isPaid: isOrderPaid(o) }));
+
+      // Compute totals from ALL orders (regardless of filter)
+      let totalPaid = 0, totalUnpaid = 0, grandTotal = 0;
+      allRows.forEach(({ order: o, isPaid }) => {
+        const amt = (o.amount !== undefined && o.amount !== null) ? Number(o.amount) : 0;
+        grandTotal += amt;
+        if (isPaid) totalPaid += amt;
+        else totalUnpaid += amt;
+      });
+
+      const rows = allRows.filter(({ isPaid }) => {
+        if (filter === 'PAID') return isPaid;
+        if (filter === 'UNPAID') return !isPaid;
+        return true;
+      });
 
       if (rows.length === 0) {
         container.innerHTML = '<p style="text-align:center; color:#666;">No orders found.</p>';
-        return;
+      } else {
+        let html = `
+          <table class="report-table">
+            <thead>
+              <tr>
+                <th>SL No</th>
+                <th>Name</th>
+                <th>Mobile</th>
+                <th>Amount (₹)</th>
+                <th>Paid</th>
+              </tr>
+            </thead>
+            <tbody>
+        `;
+
+        rows.forEach(({ order: o, slNo, isPaid }) => {
+          const amtStr = (o.amount !== undefined && o.amount !== null) ? Number(o.amount).toFixed(2) : '0.00';
+          html += `
+            <tr>
+              <td style="color:#d32f2f; font-weight:bold;">${slNo}</td>
+              <td style="text-align:left;">${escapeHtml(o.name)}</td>
+              <td style="text-align:left;">${escapeHtml(o.mobile)}</td>
+              <td>${amtStr}</td>
+              <td style="text-align:center;">
+                <span style="display:inline-block; padding:3px 8px; border-radius:4px; font-size:12px; font-weight:bold; ${isPaid ? 'background:#2e7d32; color:#fff;' : 'background:#ffebee; color:#c62828;'}">
+                  ${isPaid ? 'Paid' : 'Unpaid'}
+                </span>
+              </td>
+            </tr>
+          `;
+        });
+
+        html += `
+            </tbody>
+          </table>
+        `;
+        container.innerHTML = html;
       }
 
-      let html = `
-        <table class="report-table">
-          <thead>
-            <tr>
-              <th>SL No</th>
-              <th>Name</th>
-              <th>Mobile</th>
-              <th>Amount (₹)</th>
-              <th>Paid</th>
-            </tr>
-          </thead>
-          <tbody>
-      `;
-
-      rows.forEach(({ order: o, slNo, isPaid }) => {
-        const amtStr = (o.amount !== undefined && o.amount !== null) ? Number(o.amount).toFixed(2) : '0.00';
-        html += `
-          <tr>
-            <td style="color:#d32f2f; font-weight:bold;">${slNo}</td>
-            <td style="text-align:left;">${escapeHtml(o.name)}</td>
-            <td style="text-align:left;">${escapeHtml(o.mobile)}</td>
-            <td>${amtStr}</td>
-            <td style="text-align:center;">
-              <span style="display:inline-block; padding:3px 8px; border-radius:4px; font-size:12px; font-weight:bold; ${isPaid ? 'background:#2e7d32; color:#fff;' : 'background:#ffebee; color:#c62828;'}">
-                ${isPaid ? 'Paid' : 'Unpaid'}
-              </span>
-            </td>
-          </tr>
+      // Render totals summary at bottom-right
+      if (summaryEl) {
+        summaryEl.innerHTML = `
+          <div style="display:flex; justify-content:flex-end; margin-top:14px;">
+            <div style="background:#f5f5f5; border:1px solid #e0e0e0; border-radius:8px; padding:14px 22px; min-width:220px; box-shadow:0 1px 4px rgba(0,0,0,0.07);">
+              <div style="display:flex; justify-content:space-between; gap:24px; margin-bottom:7px;">
+                <span style="font-size:14px; color:#333; font-weight:500;">Total Amount:</span>
+                <span style="font-size:14px; font-weight:bold; color:#1a237e;">₹${grandTotal.toFixed(2)}</span>
+              </div>
+              <div style="display:flex; justify-content:space-between; gap:24px; margin-bottom:7px;">
+                <span style="font-size:14px; color:#2e7d32; font-weight:500;">&#10003; Amount Paid:</span>
+                <span style="font-size:14px; font-weight:bold; color:#2e7d32;">₹${totalPaid.toFixed(2)}</span>
+              </div>
+              <div style="border-top:1px solid #e0e0e0; padding-top:7px; display:flex; justify-content:space-between; gap:24px;">
+                <span style="font-size:14px; color:#c62828; font-weight:500;">&#10007; Amount Unpaid:</span>
+                <span style="font-size:14px; font-weight:bold; color:#c62828;">₹${totalUnpaid.toFixed(2)}</span>
+              </div>
+            </div>
+          </div>
         `;
-      });
-
-      html += `
-          </tbody>
-        </table>
-      `;
-      container.innerHTML = html;
+      }
     }
 
     window.addEventListener('popstate', (event) => {
@@ -2088,6 +2121,7 @@
       </select>
     </div>
     <div id="allOrdersTableWrap" style="overflow-x:auto;"></div>
+    <div id="allOrdersSummary"></div>
     <input type="button" class="link" value="Back" onclick="showHome()" style="margin-top:12px;">
   </div>
 
